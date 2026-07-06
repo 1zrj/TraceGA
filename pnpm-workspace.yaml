@@ -4,4 +4,4 @@ packages:
   - "packages/trace-admin"
 allowBuilds:
   esbuild: false
-  msw: set this to true or false
+  msw: true
