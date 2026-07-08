@@ -32,4 +32,11 @@ export class AppConfigService {
       database: this.configService.get<string>('CLICKHOUSE_DATABASE', 'tracega'),
     }
   }
+
+  get glm() {
+    return {
+      apiKey: this.configService.get<string>('GLM_API_KEY', ''),
+      model: this.configService.get<string>('GLM_MODEL', 'glm-4-flash'),
+    }
+  }
 }
