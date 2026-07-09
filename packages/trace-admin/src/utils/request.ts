@@ -1,11 +1,17 @@
-import axios, { type AxiosResponse } from 'axios'
+import axios from 'axios'
 
-const service = axios.create({
+interface ApiResponse<T = unknown> {
+  code: number
+  message: string
+  data: T
+}
+
+const instance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 10000,
 })
 
-service.interceptors.request.use(
+instance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
     if (token) {
@@ -18,19 +24,43 @@ service.interceptors.request.use(
   },
 )
 
-service.interceptors.response.use(
-  (response: AxiosResponse) => {
+const request = {
+  get: async function <T>(url: string, config?: Parameters<typeof instance.get>[1]) {
+    const response = await instance.get<ApiResponse<T>>(url, config)
     const res = response.data
     if (res.code !== 200) {
       console.error(res.message || 'Error')
-      return Promise.reject(new Error(res.message || 'Error'))
+      throw new Error(res.message || 'Error')
     }
-    return res
+    return res.data
   },
-  (error) => {
-    console.error(error.message || 'Network Error')
-    return Promise.reject(error)
+  post: async function <T>(url: string, data?: unknown, config?: Parameters<typeof instance.post>[2]) {
+    const response = await instance.post<ApiResponse<T>>(url, data, config)
+    const res = response.data
+    if (res.code !== 200) {
+      console.error(res.message || 'Error')
+      throw new Error(res.message || 'Error')
+    }
+    return res.data
   },
-)
+  put: async function <T>(url: string, data?: unknown, config?: Parameters<typeof instance.put>[2]) {
+    const response = await instance.put<ApiResponse<T>>(url, data, config)
+    const res = response.data
+    if (res.code !== 200) {
+      console.error(res.message || 'Error')
+      throw new Error(res.message || 'Error')
+    }
+    return res.data
+  },
+  delete: async function <T>(url: string, config?: Parameters<typeof instance.delete>[1]) {
+    const response = await instance.delete<ApiResponse<T>>(url, config)
+    const res = response.data
+    if (res.code !== 200) {
+      console.error(res.message || 'Error')
+      throw new Error(res.message || 'Error')
+    }
+    return res.data
+  },
+}
 
-export default service
+export default request

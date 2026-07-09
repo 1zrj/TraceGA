@@ -19,9 +19,9 @@ export const Dashboard: React.FC = () => {
           getEventTrend({ interval: 'day' }),
           getTopEvents({ limit: 5 }),
         ])
-        setOverview(overviewRes.data.data)
-        setEventTrend(trendRes.data.data)
-        setTopEvents(topRes.data.data)
+        setOverview(overviewRes)
+        setEventTrend(trendRes)
+        setTopEvents(topRes)
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error)
       } finally {

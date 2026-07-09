@@ -12,7 +12,7 @@ export const HomePage: React.FC = () => {
     const fetchData = async () => {
       try {
         const res = await getOverview({})
-        setOverview(res.data.data)
+        setOverview(res)
       } catch (error) {
         console.error('Failed to fetch overview:', error)
       } finally {

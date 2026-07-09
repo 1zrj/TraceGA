@@ -47,8 +47,8 @@ export const EventList: React.FC = () => {
         pageSize,
         ...filters,
       })
-      setEvents(res.data.data.list || [])
-      setTotal(res.data.data.total || 0)
+      setEvents(res.list || [])
+      setTotal(res.total || 0)
     } catch (error) {
       console.error('Failed to fetch events:', error)
     } finally {
