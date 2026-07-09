@@ -5,7 +5,7 @@ export const getOverview = (params: {
   startTime?: string
   endTime?: string
 }) => {
-  return request.get<{ data: AnalyticsOverview }>('/api/analytics/overview', { params })
+  return request.get<AnalyticsOverview>('/analytics/overview', { params })
 }
 
 export const getEventTrend = (params: {
@@ -13,7 +13,7 @@ export const getEventTrend = (params: {
   endTime?: string
   interval?: 'hour' | 'day' | 'week'
 }) => {
-  return request.get<{ data: EventTrend[] }>('/api/analytics/event-trend', { params })
+  return request.get<EventTrend[]>('/analytics/event-trend', { params })
 }
 
 export const getTopEvents = (params: {
@@ -21,12 +21,12 @@ export const getTopEvents = (params: {
   startTime?: string
   endTime?: string
 }) => {
-  return request.get<{ data: TopEvent[] }>('/api/analytics/top-events', { params })
+  return request.get<TopEvent[]>('/analytics/top-events', { params })
 }
 
 export const getConversionRate = (params: {
   startTime?: string
   endTime?: string
 }) => {
-  return request.get<{ data: { rate: number } }>('/api/analytics/conversion-rate', { params })
+  return request.get<{ rate: number }>('/analytics/conversion-rate', { params })
 }
