@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
 import { AiAnalyzeDto } from '../dto/ai-analyze.dto'
 import { AnalysisService } from '../../analysis/services/analysis.service'
+import { GlmClientService } from './glm-client.service'
+import { PromptService } from './prompt.service'
 
 @Injectable()
 export class AiService {
@@ -9,7 +10,8 @@ export class AiService {
 
   constructor(
     private readonly analysisService: AnalysisService,
-    private readonly configService: ConfigService,
+    private readonly glmClient: GlmClientService,
+    private readonly promptService: PromptService,
   ) {}
 
   async analyze(query: AiAnalyzeDto) {
@@ -31,7 +33,7 @@ export class AiService {
     // 2. 如果有自然语言问题，调用 GLM 分析
     if (query.question) {
       try {
-        const aiReply = await this.callGLM(query.question, summary, trend)
+        const aiReply = await this.callAI(query.question, summary, trend)
         return {
           insight: aiReply.insight,
           suggestions: aiReply.suggestions,
@@ -58,19 +60,21 @@ export class AiService {
     }
   }
 
-  private async callGLM(
+  /**
+   * 调用 GLM 进行数据分析
+   *
+   * 步骤：
+   * 1. 组装数据摘要文本
+   * 2. 从 Prompt 文件加载 system/user 提示词并填充变量
+   * 3. 调用 GlmClientService 发起请求
+   * 4. 解析 GLM 返回的 JSON
+   */
+  private async callAI(
     question: string,
     summary: { pv: number; uv: number; eventCount: number },
     trend: any[],
   ) {
-    const apiKey = this.configService.get<string>('GLM_API_KEY', '')
-    const model = this.configService.get<string>('GLM_MODEL', 'glm-4-flash')
-
-    if (!apiKey) {
-      throw new Error('GLM_API_KEY 未配置')
-    }
-
-    // 构造数据摘要
+    // 组装数据摘要
     const dataSummary = `
 当前数据概览：
 - PV（页面访问量）：${summary.pv}
@@ -79,48 +83,55 @@ export class AiService {
 - 近期趋势（最近 ${trend.length} 个周期）：${JSON.stringify(trend.slice(-7))}
     `.trim()
 
-    const systemPrompt = `你是一个专业的埋点数据分析师。你会收到用户的产品埋点数据和一个问题。
-请基于数据给出分析，用中文回复。回复格式严格按 JSON：
-{
-  "insight": "核心洞察（2-3 句话）",
-  "suggestions": ["建议1", "建议2", "建议3"]
-}`
+    // 从 Prompt 文件加载并填充变量
+    const systemPrompt = this.promptService.system('analyze')
+    const userPrompt = this.promptService.user('analyze', {
+      dataSummary,
+      question,
+    })
 
-    const userPrompt = `以下是埋点数据：\n${dataSummary}\n\n用户的问题是：${question}`
+    // 调用 GLM
+    const result = await this.glmClient.chat(systemPrompt, userPrompt, {
+      temperature: 0.3,
+      maxTokens: 1024,
+    })
 
-    const response = await fetch(
-      'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.3,
-          stream: false,
-        }),
-      },
-    )
+    // 解析 GLM 返回的 JSON
+    return this.parseAIResponse(result.content)
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`GLM API 响应异常 [${response.status}]: ${errorText}`)
-    }
-
-    const result = await response.json()
-    const content = result?.choices?.[0]?.message?.content || ''
-
-    // 尝试从 LLM 返回的 JSON 中解析
+  /**
+   * 解析 AI 返回的 JSON 文本
+   *
+   * 做两层容错：
+   * 1. 先尝试直接 JSON.parse
+   * 2. 失败则尝试用正则从文本中提取 {...} 再 parse
+   * 3. 再失败就把原文当 insight 返回（兜底）
+   */
+  private parseAIResponse(content: string): { insight: string; suggestions: string[] } {
+    // 第一层：直接解析
     try {
-      return JSON.parse(content)
+      const parsed = JSON.parse(content)
+      return {
+        insight: parsed.insight || '',
+        suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      }
     } catch {
-      // 如果 LLM 没返回合法 JSON，把原文当 insight 返回
+      // 第二层：AI 可能在 JSON 外面包了 markdown 代码块，尝试提取
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0])
+          return {
+            insight: parsed.insight || '',
+            suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+          }
+        } catch {
+          // 提取出来的也不是合法 JSON，走兜底
+        }
+      }
+
+      // 第三层：完全兜底，把 AI 返回的原文当 insight 展示
       return {
         insight: content,
         suggestions: [],
