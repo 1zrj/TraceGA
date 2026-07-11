@@ -1,0 +1,204 @@
+import type { ITraceCore } from '../../../types';
+import type { ErrorHandler, ErrorPayloadBase } from '../types';
+import { getBrowserContext } from '../types';
+
+type XhrMeta = {
+  method: string;
+  url: string;
+};
+
+export interface HttpErrorPayload extends ErrorPayloadBase {
+  type: 'http-error';
+  requestType: 'fetch' | 'xhr';
+  method?: string;
+  requestUrl?: string;
+  status?: number;
+  statusText?: string;
+  duration?: number;
+}
+
+export class HttpErrorHandler implements ErrorHandler {
+  private core: ITraceCore | null = null;
+  private originalFetch: typeof window.fetch | null = null;
+  private originalXhrOpen: XMLHttpRequest['open'] | null = null;
+  private originalXhrSend: XMLHttpRequest['send'] | null = null;
+  private readonly xhrMeta = new WeakMap<XMLHttpRequest, XhrMeta>();
+
+  install(core: ITraceCore): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    this.core = core;
+    this.patchFetch();
+    this.patchXhr();
+  }
+
+  uninstall(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (this.originalFetch) {
+      window.fetch = this.originalFetch;
+      this.originalFetch = null;
+    }
+
+    if (this.originalXhrOpen) {
+      XMLHttpRequest.prototype.open = this.originalXhrOpen;
+      this.originalXhrOpen = null;
+    }
+
+    if (this.originalXhrSend) {
+      XMLHttpRequest.prototype.send = this.originalXhrSend;
+      this.originalXhrSend = null;
+    }
+
+    this.core = null;
+  }
+
+  private patchFetch(): void {
+    if (this.originalFetch || typeof window.fetch !== 'function') {
+      return;
+    }
+
+    this.originalFetch = window.fetch;
+    const handler = this;
+
+    window.fetch = async function patchedFetch(input, init) {
+      const startedAt = Date.now();
+      const method = handler.getFetchMethod(input, init);
+      const requestUrl = handler.getFetchUrl(input);
+
+      try {
+        const response = await handler.originalFetch!.call(this, input, init);
+
+        if (!response.ok) {
+          handler.reportHttpError({
+            type: 'http-error',
+            requestType: 'fetch',
+            message: `HTTP request failed: ${response.status}`,
+            method,
+            requestUrl,
+            status: response.status,
+            statusText: response.statusText,
+            duration: Date.now() - startedAt,
+            ...getBrowserContext(),
+          });
+        }
+
+        return response;
+      } catch (error) {
+        handler.reportHttpError({
+          type: 'http-error',
+          requestType: 'fetch',
+          message: error instanceof Error ? error.message : 'Fetch request failed',
+          method,
+          requestUrl,
+          errorName: error instanceof Error ? error.name : undefined,
+          stack: error instanceof Error ? error.stack : undefined,
+          duration: Date.now() - startedAt,
+          ...getBrowserContext(),
+        });
+        throw error;
+      }
+    };
+  }
+
+  private patchXhr(): void {
+    if (this.originalXhrOpen || typeof XMLHttpRequest === 'undefined') {
+      return;
+    }
+
+    this.originalXhrOpen = XMLHttpRequest.prototype.open;
+    this.originalXhrSend = XMLHttpRequest.prototype.send;
+    const handler = this;
+
+    XMLHttpRequest.prototype.open = function patchedOpen(method: string, url: string | URL) {
+      handler.xhrMeta.set(this, {
+        method,
+        url: String(url),
+      });
+
+      return handler.originalXhrOpen!.apply(this, arguments as any);
+    } as XMLHttpRequest['open'];
+
+    XMLHttpRequest.prototype.send = function patchedSend() {
+      const xhr = this;
+      const startedAt = Date.now();
+
+      const handleLoadEnd = (): void => {
+        if (xhr.status >= 400) {
+          const meta = handler.xhrMeta.get(xhr);
+
+          handler.reportHttpError({
+            type: 'http-error',
+            requestType: 'xhr',
+            message: `HTTP request failed: ${xhr.status}`,
+            method: meta?.method,
+            requestUrl: meta?.url,
+            status: xhr.status,
+            statusText: xhr.statusText,
+            duration: Date.now() - startedAt,
+            ...getBrowserContext(),
+          });
+        }
+      };
+
+      const handleNetworkError = (): void => {
+        const meta = handler.xhrMeta.get(xhr);
+
+        handler.reportHttpError({
+          type: 'http-error',
+          requestType: 'xhr',
+          message: 'XMLHttpRequest failed',
+          method: meta?.method,
+          requestUrl: meta?.url,
+          status: xhr.status || undefined,
+          statusText: xhr.statusText || undefined,
+          duration: Date.now() - startedAt,
+          ...getBrowserContext(),
+        });
+      };
+
+      xhr.addEventListener('loadend', handleLoadEnd, { once: true });
+      xhr.addEventListener('error', handleNetworkError, { once: true });
+      xhr.addEventListener('timeout', handleNetworkError, { once: true });
+      xhr.addEventListener('abort', handleNetworkError, { once: true });
+
+      return handler.originalXhrSend!.apply(this, arguments as any);
+    } as XMLHttpRequest['send'];
+  }
+
+  private reportHttpError(payload: HttpErrorPayload): void {
+    this.core?.trackEvent('http-error', payload);
+  }
+
+  private getFetchMethod(input: RequestInfo | URL, init?: RequestInit): string | undefined {
+    if (init?.method) {
+      return init.method;
+    }
+
+    if (typeof Request !== 'undefined' && input instanceof Request) {
+      return input.method;
+    }
+
+    return 'GET';
+  }
+
+  private getFetchUrl(input: RequestInfo | URL): string | undefined {
+    if (typeof input === 'string') {
+      return input;
+    }
+
+    if (input instanceof URL) {
+      return input.href;
+    }
+
+    if (typeof Request !== 'undefined' && input instanceof Request) {
+      return input.url;
+    }
+
+    return undefined;
+  }
+}
