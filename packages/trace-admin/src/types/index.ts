@@ -121,3 +121,67 @@ export interface PageInfo {
   pageSize: number
   total: number
 }
+
+export interface EventQueryDto {
+  page?: number
+  pageSize?: number
+  eventType?: string
+  appId?: string
+  keyword?: string
+}
+
+export interface SummaryQueryDto {
+  startTime: string
+  endTime: string
+  appId?: string
+  eventType?: string
+}
+
+export interface TrendQueryDto {
+  startTime: string
+  endTime: string
+  interval: TrendInterval
+  appId?: string
+  eventType?: string
+}
+
+export interface FilterQueryDto {
+  startTime: string
+  endTime: string
+  filters: {
+    key: string
+    operator: 'eq' | 'ne' | 'gt' | 'lt' | 'like'
+    value: unknown
+  }[]
+  groupBy?: string[]
+  orderBy?: {
+    field: string
+    direction: 'ASC' | 'DESC'
+  }
+}
+
+export interface AlarmQueryDto {
+  page?: number
+  pageSize?: number
+  level?: AlarmLevel
+  status?: AlarmStatus
+  startTime?: string
+  endTime?: string
+}
+
+export interface AiAnalyzeDto {
+  prompt: string
+  startTime?: string
+  endTime?: string
+  appId?: string
+}
+
+export interface LoginDto {
+  username: string
+  password: string
+}
+
+export interface LoginResult {
+  token: string
+  user: UserInfo
+}

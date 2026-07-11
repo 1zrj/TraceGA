@@ -1,27 +1,27 @@
 import React, { useEffect, useState } from 'react'
 import { Spin, Row, Col, Card } from 'antd'
 import ReactECharts from 'echarts-for-react'
-import { getOverview, getEventTrend, getTopEvents } from '@/api'
-import type { AnalyticsOverview, EventTrend, TopEvent } from '@/types'
+import { getSummary, getTrend } from '@/api'
+import type { AnalyticsOverview, TrendData } from '@/types'
 import { StatCard } from '@/components'
 
 export const Dashboard: React.FC = () => {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null)
-  const [eventTrend, setEventTrend] = useState<EventTrend[]>([])
-  const [topEvents, setTopEvents] = useState<TopEvent[]>([])
+  const [trendData, setTrendData] = useState<TrendData[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [overviewRes, trendRes, topRes] = await Promise.all([
-          getOverview({}),
-          getEventTrend({ interval: 'day' }),
-          getTopEvents({ limit: 5 }),
+        const now = new Date().toISOString()
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+        const [overviewRes, trendRes] = await Promise.all([
+          getSummary({ startTime: weekAgo, endTime: now }),
+          getTrend({ startTime: weekAgo, endTime: now, interval: 'day' }),
         ])
-        setOverview(overviewRes.data.data)
-        setEventTrend(trendRes.data.data)
-        setTopEvents(topRes.data.data)
+        setOverview(overviewRes)
+        setTrendData(trendRes)
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error)
       } finally {
@@ -45,49 +45,27 @@ export const Dashboard: React.FC = () => {
     },
     xAxis: {
       type: 'category',
-      data: eventTrend.map((item) => item.time),
+      data: trendData.map((item) => item.time),
     },
     yAxis: {
       type: 'value',
     },
     series: [
       {
-        name: '事件数',
+        name: 'PV',
         type: 'bar',
-        data: eventTrend.map((item) => item.count),
+        data: trendData.map((item) => item.pv),
         itemStyle: {
           color: '#3b82f6',
         },
       },
-    ],
-  }
-
-  const topEventsOption = {
-    tooltip: {
-      trigger: 'item',
-    },
-    series: [
       {
-        name: '热门事件',
-        type: 'pie',
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: false,
+        name: 'UV',
+        type: 'line',
+        data: trendData.map((item) => item.uv),
         itemStyle: {
-          borderRadius: 4,
-          borderColor: '#fff',
-          borderWidth: 2,
+          color: '#10b981',
         },
-        label: {
-          show: true,
-          formatter: '{b}: {c}',
-        },
-        data: topEvents.map((item, index) => ({
-          value: item.count,
-          name: item.name,
-          itemStyle: {
-            color: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index],
-          },
-        })),
       },
     ],
   }
@@ -100,28 +78,23 @@ export const Dashboard: React.FC = () => {
 
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} lg={6}>
-          <StatCard title="总事件数" value={overview?.totalEvents || 0} change="+12.5%" />
+          <StatCard title="页面浏览量(PV)" value={overview?.pv || 0} change="+12.5%" />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <StatCard title="总用户数" value={overview?.totalUsers || 0} change="+8.3%" />
+          <StatCard title="独立访客数(UV)" value={overview?.uv || 0} change="+8.3%" />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <StatCard title="平均会话时长" value={`${overview?.avgSessionDuration || 0}s`} change="-2.1%" changeType="negative" />
+          <StatCard title="人均访问次数" value={overview?.rate || '0'} change="+3.7%" />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <StatCard title="转化率" value={`${overview?.conversionRate || 0}%`} change="+3.7%" />
+          <StatCard title="统计周期" value={overview ? `${overview.startTime.slice(0, 10)} ~ ${overview.endTime.slice(0, 10)}` : '-'} />
         </Col>
       </Row>
 
       <Row gutter={16}>
-        <Col xs={24} lg={16}>
-          <Card title="事件趋势" style={{ height: '100%' }}>
+        <Col xs={24} lg={24}>
+          <Card title="PV/UV 趋势" style={{ height: '100%' }}>
             <ReactECharts option={trendOption} style={{ height: 300 }} />
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card title="热门事件" style={{ height: '100%' }}>
-            <ReactECharts option={topEventsOption} style={{ height: 300 }} />
           </Card>
         </Col>
       </Row>

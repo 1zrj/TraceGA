@@ -8,15 +8,14 @@ import { useFilter } from '@/hooks/useFilter'
 
 const filterConfig = [
   { key: 'keyword', label: '关键词', type: 'input' as const, placeholder: '搜索事件名称' },
-  { key: 'startTime', label: '开始时间', type: 'date' as const },
-  { key: 'endTime', label: '结束时间', type: 'date' as const },
 ]
 
 const columns = [
-  { title: '事件名称', dataIndex: 'name', key: 'name' },
-  { title: '事件类型', dataIndex: 'type', key: 'type' },
-  { title: '发生时间', dataIndex: 'timestamp', key: 'timestamp' },
-  { title: '用户ID', dataIndex: 'userId', key: 'userId' },
+  { title: '事件名称', dataIndex: 'eventName', key: 'eventName' },
+  { title: '事件类型', dataIndex: 'eventType', key: 'eventType' },
+  { title: '分类', dataIndex: 'category', key: 'category' },
+  { title: '应用ID', dataIndex: 'appId', key: 'appId' },
+  { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt' },
   {
     title: '操作',
     key: 'action',
@@ -35,8 +34,6 @@ export const EventList: React.FC = () => {
   const { currentPage, pageSize, total, setTotal, handlePageChange, handlePageSizeChange } = usePagination()
   const { filters, clearAllFilters } = useFilter<{
     keyword?: string
-    startTime?: string
-    endTime?: string
   }>()
 
   const fetchEvents = useCallback(async () => {
@@ -47,8 +44,8 @@ export const EventList: React.FC = () => {
         pageSize,
         ...filters,
       })
-      setEvents(res.data.data.list || [])
-      setTotal(res.data.data.total || 0)
+      setEvents(res.list || [])
+      setTotal(res.total || 0)
     } catch (error) {
       console.error('Failed to fetch events:', error)
     } finally {
