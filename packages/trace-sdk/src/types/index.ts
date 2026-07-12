@@ -44,3 +44,4 @@ export interface ITraceCore {
   setUser(userId: string): void;
   getEnvInfo(): EnvInfo;
 }
+export type { TrackEventData as IEvent }
