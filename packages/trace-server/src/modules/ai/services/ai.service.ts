@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { AiAnalyzeDto } from '../dto/ai-analyze.dto'
+import { AnomalyExplainDto } from '../dto/anomaly-explain.dto'
 import { AnalysisService } from '../../analysis/services/analysis.service'
 import { GlmClientService } from './glm-client.service'
 import { PromptService } from './prompt.service'
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name)
@@ -14,7 +16,6 @@ export class AiService {
   ) {}
 
   async analyze(query: AiAnalyzeDto) {
-    // 1. 从 ClickHouse 查询真实数据
     const [summary, trend] = await Promise.all([
       this.analysisService.getSummary({
         appId: query.appId,
@@ -29,7 +30,6 @@ export class AiService {
       }),
     ])
 
-    // 2. 如果有自然语言问题，调用 GLM 分析
     if (query.question) {
       try {
         const aiReply = await this.callAI(query.question, summary, trend)
@@ -50,7 +50,6 @@ export class AiService {
       }
     }
 
-    // 如果没有问题，直接返回数据
     return {
       insight: '请提供一个具体问题以获得 AI 分析。',
       suggestions: [],
@@ -59,21 +58,11 @@ export class AiService {
     }
   }
 
-  /**
-   * 调用 GLM 进行数据分析
-   *
-   * 步骤：
-   * 1. 组装数据摘要文本
-   * 2. 从 Prompt 文件加载 system/user 提示词并填充变量
-   * 3. 调用 GlmClientService 发起请求
-   * 4. 解析 GLM 返回的 JSON
-   */
   private async callAI(
     question: string,
     summary: { pv: number; uv: number; eventCount: number },
     trend: any[],
   ) {
-    // 组装数据摘要
     const dataSummary = `
 当前数据概览：
 - PV（页面访问量）：${summary.pv}
@@ -82,33 +71,21 @@ export class AiService {
 - 近期趋势（最近 ${trend.length} 个周期）：${JSON.stringify(trend.slice(-7))}
     `.trim()
 
-    // 从 Prompt 文件加载并填充变量
     const systemPrompt = this.promptService.system('analyze')
     const userPrompt = this.promptService.user('analyze', {
       dataSummary,
       question,
     })
 
-    // 调用 GLM
     const result = await this.glmClient.chat(systemPrompt, userPrompt, {
       temperature: 0.3,
       maxTokens: 1024,
     })
 
-    // 解析 GLM 返回的 JSON
     return this.parseAIResponse(result.content)
   }
 
-  /**
-   * 解析 AI 返回的 JSON 文本
-   *
-   * 做两层容错：
-   * 1. 先尝试直接 JSON.parse
-   * 2. 失败则尝试用正则从文本中提取 {...} 再 parse
-   * 3. 再失败就把原文当 insight 返回（兜底）
-   */
   private parseAIResponse(content: string): { insight: string; suggestions: string[] } {
-    // 第一层：直接解析
     try {
       const parsed = JSON.parse(content)
       return {
@@ -116,7 +93,6 @@ export class AiService {
         suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
       }
     } catch {
-      // 第二层：AI 可能在 JSON 外面包了 markdown 代码块，尝试提取
       const jsonMatch = content.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
         try {
@@ -125,30 +101,19 @@ export class AiService {
             insight: parsed.insight || '',
             suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
           }
-        } catch {
-          // 提取出来的也不是合法 JSON，走兜底
-        }
+        } catch {}
       }
-
-      // 第三层：完全兜底，把 AI 返回的原文当 insight 展示
       return {
         insight: content,
         suggestions: [],
       }
     }
   }
-  /**
-   * 生成 AI 数据日报
-   *
-   * @param appId  应用 ID
-   * @param date   报表日期，格式 YYYY-MM-DD，默认昨天
-   */
+
   async generateDailyReport(appId: string, date?: string) {
-    // 1. 确定日期：默认昨天
     const targetDate = date || this.getYesterday()
     const yesterdayDate = this.getDayBefore(targetDate)
 
-    // 2. 并行查询：今日汇总 + 昨日汇总 + 今日事件排行 + 昨日事件排行 + 错误事件
     const startOfDay = `${targetDate}T00:00:00`
     const endOfDay = `${targetDate}T23:59:59`
     const startOfYesterday = `${yesterdayDate}T00:00:00`
@@ -168,20 +133,16 @@ export class AiService {
       this.analysisService.getFiltered({ appId, eventTypes: ['error'], startTime: startOfDay, endTime: endOfDay }),
     ])
 
-    // 3. 计算环比变化
     const pvChange = this.calcChange(todaySummary.pv, yesterdaySummary.pv)
     const uvChange = this.calcChange(todaySummary.uv, yesterdaySummary.uv)
-
-    // 4. 计算每个事件的环比变化
     const eventTrends = this.buildEventTrends(todayEvents, yesterdayEvents)
 
-    // 5. 组装结构化 JSON
     const stats = {
       date: targetDate,
       totalPv: todaySummary.pv,
       totalUv: todaySummary.uv,
-      pvChange,       // 如 -3.2
-      uvChange,       // 如 1.5
+      pvChange,
+      uvChange,
       topEvents: todayEvents.slice(0, 5).map(e => ({
         eventName: e.event_name,
         pv: e.count,
@@ -193,17 +154,15 @@ export class AiService {
       })),
     }
 
-    // 6. 从 Prompt 文件加载模板
     const systemPrompt = this.promptService.system('daily-report')
     const userPrompt = this.promptService.user('daily-report', {
       statsJson: JSON.stringify(stats, null, 2),
     })
 
-    // 7. 调用 GLM
     try {
       const result = await this.glmClient.chat(systemPrompt, userPrompt, {
-        temperature: 0.5,   // 日报可以稍微有点创造性
-        maxTokens: 800,     // 200 字中文 ≈ 400-600 tokens
+        temperature: 0.5,
+        maxTokens: 1024,
       })
 
       return {
@@ -221,29 +180,150 @@ export class AiService {
     }
   }
 
+  /**
+   * AI 异常事件解释
+   * 前端传入事件名称和数值，GLM 分析可能原因并给出排查建议。
+   * 本方法不查 ClickHouse —— 数据由前端提供。
+   */
+  async explainAnomaly(dto: AnomalyExplainDto) {
+    const current = dto.currentValue ?? 0
+    const previous = dto.previousValue ?? 0
+    const changePercent = this.calcChange(current, previous)
+    const compareLabel = dto.compareLabel || '前一日'
+
+    const contextLines = this.buildAnomalyContextLines(dto.context)
+
+    const systemPrompt = this.promptService.system('anomaly-explain')
+    const userPrompt = this.promptService.user('anomaly-explain', {
+      eventName: dto.eventName,
+      currentValue: String(current),
+      previousValue: String(previous),
+      compareLabel,
+      changePercent: String(changePercent),
+      contextLines,
+    })
+
+    try {
+      const result = await this.glmClient.chat(systemPrompt, userPrompt, {
+        temperature: 0.3,
+        maxTokens: 1024,
+      })
+
+      const parsed = this.parseAnomalyResponse(result.content)
+
+      return {
+        eventName: dto.eventName,
+        currentValue: current,
+        previousValue: previous,
+        changePercent,
+        compareLabel,
+        possibleReasons: parsed.possibleReasons,
+        suggestions: parsed.suggestions,
+        rawContext: dto.context || {},
+        generatedAt: new Date().toISOString(),
+      }
+    } catch (err) {
+      this.logger.error('异常解释生成失败', err)
+      return {
+        eventName: dto.eventName,
+        currentValue: current,
+        previousValue: previous,
+        changePercent,
+        compareLabel,
+        possibleReasons: [],
+        suggestions: ['AI 分析服务暂时不可用，请稍后重试或手动排查'],
+        rawContext: dto.context || {},
+        generatedAt: new Date().toISOString(),
+      }
+    }
+  }
+
+  /**
+   * 将可选的 context 字段拼成 Prompt 文本
+   * 有值拼一行，没值跳过；全没有返回"无"
+   */
+  private buildAnomalyContextLines(
+    ctx?: AnomalyExplainDto['context'],
+  ): string {
+    if (!ctx) return '无'
+
+    const lines: string[] = []
+    if (ctx.pageUrl) {
+      lines.push(`所在页面：${ctx.pageUrl}`)
+    }
+    if (ctx.pageChange !== undefined) {
+      lines.push(`页面访问量变化：${ctx.pageChange}%`)
+    }
+    if (ctx.releaseNotes) {
+      lines.push(`最近发布记录：${ctx.releaseNotes}`)
+    }
+    if (ctx.additionalInfo) {
+      lines.push(`补充信息：${ctx.additionalInfo}`)
+    }
+
+    return lines.length > 0 ? lines.join('\n') : '无'
+  }
+
+  /**
+   * 解析异常解释 Prompt 返回的 JSON
+   * 与 parseAIResponse 分开：两个 Prompt 输出字段不同
+   * （possibleReasons + suggestions vs insight + suggestions）
+   */
+  private parseAnomalyResponse(content: string): {
+    possibleReasons: string[]
+    suggestions: string[]
+  } {
+    try {
+      const parsed = JSON.parse(content)
+      return {
+        possibleReasons: Array.isArray(parsed.possibleReasons)
+          ? parsed.possibleReasons
+          : [],
+        suggestions: Array.isArray(parsed.suggestions)
+          ? parsed.suggestions
+          : [],
+      }
+    } catch {
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0])
+          return {
+            possibleReasons: Array.isArray(parsed.possibleReasons)
+              ? parsed.possibleReasons
+              : [],
+            suggestions: Array.isArray(parsed.suggestions)
+              ? parsed.suggestions
+              : [],
+          }
+        } catch {}
+      }
+      return {
+        possibleReasons: [content],
+        suggestions: [],
+      }
+    }
+  }
+
   // ===== 辅助方法 =====
 
-  /** 获取昨天的日期字符串 YYYY-MM-DD */
   private getYesterday(): string {
     const d = new Date()
     d.setDate(d.getDate() - 1)
     return d.toISOString().slice(0, 10)
   }
 
-  /** 获取指定日期前一天的日期字符串 */
   private getDayBefore(date: string): string {
     const d = new Date(date)
     d.setDate(d.getDate() - 1)
     return d.toISOString().slice(0, 10)
   }
 
-  /** 计算环比变化百分比，保留 1 位小数 */
   private calcChange(today: number, yesterday: number): number {
     if (yesterday === 0) return today > 0 ? 100 : 0
     return Math.round(((today - yesterday) / yesterday) * 1000) / 10
   }
 
-  /** 构建每个事件的环比变化列表 */
   private buildEventTrends(
     todayEvents: Array<{ event_name: string; count: number }>,
     yesterdayEvents: Array<{ event_name: string; count: number }>,
