@@ -4,8 +4,8 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from '@/routes/index'
 
 if (import.meta.env.DEV) {
-  import('./mocks/browser').then(({ worker }) => {
-    worker.start()
+  import('./mocks/browser').then((module) => {
+    module.worker.start()
   })
 }
 

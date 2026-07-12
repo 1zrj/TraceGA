@@ -3,5 +3,5 @@ packages:
   - "packages/trace-server"
   - "packages/trace-admin"
 allowBuilds:
-  esbuild: false
+  esbuild: true
   msw: true
