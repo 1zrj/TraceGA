@@ -4,8 +4,32 @@ export interface TraceConfig {
   sampleRate?: number;
   maxBufferSize?: number;
   flushInterval?: number;
-  enableAutoError?: boolean;
-  enableAutoPerformance?: boolean;
+  plugins?: BuiltinPluginsConfig;
+  errorPlugin?: ErrorPluginConfig;
+  eventPlugin?: EventPluginConfig;
+  performancePlugin?: PerformancePluginConfig;
+}
+
+export type BuiltinPluginName = 'error' | 'event' | 'performance';
+
+export type BuiltinPluginsConfig = Partial<Record<BuiltinPluginName, boolean>>;
+
+export interface ErrorPluginConfig {
+  js?: boolean;
+  promise?: boolean;
+  resource?: boolean;
+  http?: boolean;
+}
+
+export interface EventPluginConfig {
+  click?: boolean;
+  route?: boolean;
+  exposure?: boolean;
+}
+
+export interface PerformancePluginConfig {
+  webVitals?: boolean;
+  resource?: boolean;
 }
 
 export interface CommonParams {

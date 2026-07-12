@@ -23,6 +23,11 @@ export class HttpErrorHandler implements ErrorHandler {
   private originalXhrOpen: XMLHttpRequest['open'] | null = null;
   private originalXhrSend: XMLHttpRequest['send'] | null = null;
   private readonly xhrMeta = new WeakMap<XMLHttpRequest, XhrMeta>();
+  private readonly reportUrl?: string;
+
+  constructor(reportUrl?: string) {
+    this.reportUrl = reportUrl;
+  }
 
   install(core: ITraceCore): void {
     if (typeof window === 'undefined') {
@@ -69,6 +74,10 @@ export class HttpErrorHandler implements ErrorHandler {
       const startedAt = Date.now();
       const method = handler.getFetchMethod(input, init);
       const requestUrl = handler.getFetchUrl(input);
+
+      if (handler.isReportUrl(requestUrl)) {
+        return handler.originalFetch!.call(this, input, init);
+      }
 
       try {
         const response = await handler.originalFetch!.call(this, input, init);
@@ -128,9 +137,13 @@ export class HttpErrorHandler implements ErrorHandler {
       const startedAt = Date.now();
 
       const handleLoadEnd = (): void => {
-        if (xhr.status >= 400) {
-          const meta = handler.xhrMeta.get(xhr);
+        const meta = handler.xhrMeta.get(xhr);
 
+        if (handler.isReportUrl(meta?.url)) {
+          return;
+        }
+
+        if (xhr.status >= 400) {
           handler.reportHttpError({
             type: 'http-error',
             requestType: 'xhr',
@@ -147,6 +160,10 @@ export class HttpErrorHandler implements ErrorHandler {
 
       const handleNetworkError = (): void => {
         const meta = handler.xhrMeta.get(xhr);
+
+        if (handler.isReportUrl(meta?.url)) {
+          return;
+        }
 
         handler.reportHttpError({
           type: 'http-error',
@@ -200,5 +217,9 @@ export class HttpErrorHandler implements ErrorHandler {
     }
 
     return undefined;
+  }
+
+  private isReportUrl(url?: string): boolean {
+    return Boolean(url && this.reportUrl && url === this.reportUrl);
   }
 }
