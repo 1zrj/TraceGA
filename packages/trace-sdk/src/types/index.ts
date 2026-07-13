@@ -1,5 +1,7 @@
+export { EventType } from '../core/types';
+
 export interface TraceConfig {
-  projectId: string;
+  appId: string;
   reportUrl: string;
   sampleRate?: number;
   maxBufferSize?: number;
@@ -32,16 +34,22 @@ export interface PerformancePluginConfig {
   resource?: boolean;
 }
 
-export interface CommonParams {
-  [key: string]: any;
-}
-
+/** 上报到服务端的事件数据结构*/
 export interface TrackEventData {
+  /** 事件类型（插件大类），如 error / event / performance */
+  eventType: string;
+  /** 事件名称（具体事件标识），如 js-error / http-error */
   eventName: string;
+  /** 项目 ID，注册时由 appId 传入 */
+  appId: string;
+  /** 事件上报时间戳（毫秒） */
   timestamp: number;
-  customParams: Record<string, any>;
-  commonParams: CommonParams;
-  envInfo: EnvInfo;
+  /** 事件负载数据 */
+  properties: Record<string, any>;
+  /** 事件发生时的页面 URL */
+  url?: string;
+  /** 浏览器 User-Agent */
+  userAgent?: string;
 }
 
 export interface EnvInfo {
@@ -57,10 +65,7 @@ export interface TracePlugin {
 
 export interface ITraceCore {
   register(config: TraceConfig): void;
-  trackEvent(eventName: string, params?: Record<string, any>): void;
-  addCommonParams(params: CommonParams): void;
-  removeCommonParams(keys: string[]): void;
-  setUser(userId: string): void;
+  trackEvent(eventType: string, eventName: string, params?: Record<string, any>): void;
   getEnvInfo(): EnvInfo;
 }
-export type { TrackEventData as IEvent }
+export type { TrackEventData as IEvent };

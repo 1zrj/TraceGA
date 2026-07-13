@@ -1,3 +1,4 @@
+export { ErrorEventName } from './types';
 export { ErrorPlugin } from './ErrorPlugin';
 export type { HttpErrorPayload } from './handlers/HttpErrorHandler';
 export type { JsErrorPayload } from './handlers/JsErrorHandler';

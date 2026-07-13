@@ -4,14 +4,13 @@ import type { TrackEventData } from '../src/types';
 
 function makeEvent(name: string): TrackEventData {
   return {
+    eventType: name,
     eventName: name,
+    appId: 'test',
     timestamp: Date.now(),
-    customParams: {},
-    commonParams: {},
-    envInfo: {
-      url: 'http://localhost',
-      userAgent: 'test',
-    },
+    properties: {},
+    url: 'http://localhost',
+    userAgent: 'test',
   };
 }
 
