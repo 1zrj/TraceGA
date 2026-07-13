@@ -7,7 +7,7 @@ describe('ErrorPlugin', () => {
     const spy = vi.spyOn(console, 'log');
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
       plugins: {
         error: true,
@@ -29,22 +29,22 @@ describe('ErrorPlugin', () => {
     expect(spy).toHaveBeenCalledWith(
       '[TraceGA SDK] Event tracked:',
       expect.objectContaining({
+        eventType: 'error',
         eventName: 'js-error',
-        customParams: expect.objectContaining({
-          type: 'js-error',
+        appId: 'test',
+        properties: expect.objectContaining({
           message: 'configured boom',
+          occurredAt: expect.any(Number),
         }),
-        envInfo: expect.objectContaining({
-          url: window.location.href,
-          userAgent: navigator.userAgent,
-        }),
+        url: window.location.href,
+        userAgent: navigator.userAgent,
       }),
     );
 
     spy.mockClear();
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
       plugins: {
         error: false,
@@ -72,7 +72,7 @@ describe('ErrorPlugin', () => {
     const spy = vi.spyOn(console, 'log');
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
       sampleRate: 0,
       plugins: {
@@ -122,10 +122,11 @@ describe('ErrorPlugin', () => {
     );
 
     expect(core.trackEvent).toHaveBeenCalledWith(
+      'error',
       'js-error',
       expect.objectContaining({
-        type: 'js-error',
         message: 'boom',
+        occurredAt: expect.any(Number),
         filename: 'app.js',
         lineno: 10,
         colno: 20,
@@ -169,10 +170,11 @@ describe('ErrorPlugin', () => {
     );
 
     expect(core.trackEvent).toHaveBeenCalledWith(
+      'error',
       'promise-error',
       expect.objectContaining({
-        type: 'promise-error',
         message: 'promise boom',
+        occurredAt: expect.any(Number),
         reasonType: 'Error',
         errorName: 'Error',
         stack: error.stack,
@@ -196,9 +198,10 @@ describe('ErrorPlugin', () => {
     image.dispatchEvent(new Event('error'));
 
     expect(core.trackEvent).toHaveBeenCalledWith(
+      'error',
       'resource-error',
       expect.objectContaining({
-        type: 'resource-error',
+        occurredAt: expect.any(Number),
         tagName: 'img',
         resourceUrl: 'https://cdn.example.com/missing.png',
       }),
@@ -226,10 +229,11 @@ describe('ErrorPlugin', () => {
       });
 
       expect(core.trackEvent).toHaveBeenCalledWith(
+        'error',
         'http-error',
         expect.objectContaining({
-          type: 'http-error',
           requestType: 'fetch',
+          occurredAt: expect.any(Number),
           method: 'POST',
           requestUrl: '/api/fail',
           status: 500,
@@ -252,7 +256,7 @@ describe('ErrorPlugin', () => {
 
     try {
       core.register({
-        projectId: 'test',
+        appId: 'test',
         reportUrl: 'http://localhost/api/track',
         plugins: {
           error: true,
@@ -271,7 +275,7 @@ describe('ErrorPlugin', () => {
       expect(spy).not.toHaveBeenCalledWith(
         '[TraceGA SDK] Event tracked:',
         expect.objectContaining({
-          customParams: expect.objectContaining({
+          properties: expect.objectContaining({
             requestUrl: 'http://localhost/api/track',
           }),
         }),
@@ -279,15 +283,17 @@ describe('ErrorPlugin', () => {
       expect(spy).toHaveBeenCalledWith(
         '[TraceGA SDK] Event tracked:',
         expect.objectContaining({
+          eventType: 'error',
           eventName: 'http-error',
-          customParams: expect.objectContaining({
+          appId: 'test',
+          properties: expect.objectContaining({
             requestUrl: 'http://localhost/api/fail',
           }),
         }),
       );
     } finally {
       core.register({
-        projectId: 'test',
+        appId: 'test',
         reportUrl: 'http://localhost/api/track',
         plugins: {
           error: false,

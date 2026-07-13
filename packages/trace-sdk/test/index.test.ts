@@ -7,7 +7,7 @@ describe('TraceCore skeleton', () => {
 
     expect(() => {
       core.register({
-        projectId: 'test',
+        appId: 'test',
         reportUrl: 'http://localhost/api',
         sampleRate: 0.5,
       });
@@ -19,12 +19,12 @@ describe('TraceCore skeleton', () => {
     const spy = vi.spyOn(console, 'log');
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
       sampleRate: 1,
     });
     spy.mockClear();
-    core.trackEvent('test_event', { foo: 'bar' });
+    core.trackEvent('test', 'test_event', { foo: 'bar' });
 
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
@@ -36,12 +36,12 @@ describe('TraceCore skeleton', () => {
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.8);
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
       sampleRate: 0.5,
     });
     logSpy.mockClear();
-    core.trackEvent('sampled_out_event');
+    core.trackEvent('test', 'sampled_out_event');
 
     expect(logSpy).not.toHaveBeenCalled();
 
@@ -55,21 +55,21 @@ describe('TraceCore skeleton', () => {
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.2);
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
       sampleRate: 0.5,
     });
     logSpy.mockClear();
-    core.trackEvent('sampled_in_event');
+    core.trackEvent('test', 'sampled_in_event');
 
     expect(logSpy).toHaveBeenCalledWith(
       '[TraceGA SDK] Event tracked:',
       expect.objectContaining({
+        eventType: 'test',
         eventName: 'sampled_in_event',
-        envInfo: expect.objectContaining({
-          url: window.location.href,
-          userAgent: navigator.userAgent,
-        }),
+        appId: 'test',
+        url: window.location.href,
+        userAgent: navigator.userAgent,
       }),
     );
 

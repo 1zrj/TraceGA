@@ -1,5 +1,7 @@
 import type { ITraceCore } from '../../../types';
+import { EventType } from '../../../core/types';
 import type { ErrorHandler, ErrorPayloadBase } from '../types';
+import { ErrorEventName } from '../types';
 
 type XhrMeta = {
   method: string;
@@ -7,7 +9,6 @@ type XhrMeta = {
 };
 
 export interface HttpErrorPayload extends ErrorPayloadBase {
-  type: 'http-error';
   requestType: 'fetch' | 'xhr';
   method?: string;
   requestUrl?: string;
@@ -82,29 +83,33 @@ export class HttpErrorHandler implements ErrorHandler {
         const response = await handler.originalFetch!.call(this, input, init);
 
         if (!response.ok) {
+          const occurredAt = Date.now();
+
           handler.reportHttpError({
-            type: 'http-error',
             requestType: 'fetch',
             message: `HTTP request failed: ${response.status}`,
+            occurredAt,
             method,
             requestUrl,
             status: response.status,
             statusText: response.statusText,
-            duration: Date.now() - startedAt,
+            duration: occurredAt - startedAt,
           });
         }
 
         return response;
       } catch (error) {
+        const occurredAt = Date.now();
+
         handler.reportHttpError({
-          type: 'http-error',
           requestType: 'fetch',
           message: error instanceof Error ? error.message : 'Fetch request failed',
+          occurredAt,
           method,
           requestUrl,
           errorName: error instanceof Error ? error.name : undefined,
           stack: error instanceof Error ? error.stack : undefined,
-          duration: Date.now() - startedAt,
+          duration: occurredAt - startedAt,
         });
         throw error;
       }
@@ -141,15 +146,17 @@ export class HttpErrorHandler implements ErrorHandler {
         }
 
         if (xhr.status >= 400) {
+          const occurredAt = Date.now();
+
           handler.reportHttpError({
-            type: 'http-error',
             requestType: 'xhr',
             message: `HTTP request failed: ${xhr.status}`,
+            occurredAt,
             method: meta?.method,
             requestUrl: meta?.url,
             status: xhr.status,
             statusText: xhr.statusText,
-            duration: Date.now() - startedAt,
+            duration: occurredAt - startedAt,
           });
         }
       };
@@ -161,15 +168,17 @@ export class HttpErrorHandler implements ErrorHandler {
           return;
         }
 
+        const occurredAt = Date.now();
+
         handler.reportHttpError({
-          type: 'http-error',
           requestType: 'xhr',
           message: 'XMLHttpRequest failed',
+          occurredAt,
           method: meta?.method,
           requestUrl: meta?.url,
           status: xhr.status || undefined,
           statusText: xhr.statusText || undefined,
-          duration: Date.now() - startedAt,
+          duration: occurredAt - startedAt,
         });
       };
 
@@ -183,7 +192,7 @@ export class HttpErrorHandler implements ErrorHandler {
   }
 
   private reportHttpError(payload: HttpErrorPayload): void {
-    this.core?.trackEvent('http-error', payload);
+    this.core?.trackEvent(EventType.Error, ErrorEventName.HttpError, payload);
   }
 
   private getFetchMethod(input: RequestInfo | URL, init?: RequestInit): string | undefined {
