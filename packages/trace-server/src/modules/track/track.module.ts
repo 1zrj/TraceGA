@@ -9,14 +9,12 @@ import {
   ClickEventProcessor,
   DefaultProcessor,
 } from './processors/event.processor'
-import { ClickHouseService } from '@/database/clickhouse.service'
 
 @Module({
   controllers: [TrackController],
   providers: [
     TrackService,
     TrackRepository,
-    ClickHouseService,
     EventProcessorFactory,
     PageViewProcessor,
     CustomEventProcessor,

@@ -1,62 +1,82 @@
 import { Injectable } from '@nestjs/common'
-import { Repository, Like, Raw } from 'typeorm'
-import { InjectRepository } from '@nestjs/typeorm'
-import { Event } from '../entities/event.entity'
+import { PrismaService } from '@/database/prisma.service'
+import { Prisma } from '@/generated/prisma/client'
 import { GetEventsDto } from '../dto/get-events.dto'
+import { CreateEventDto } from '../dto/create-event.dto'
+import { UpdateEventDto } from '../dto/update-event.dto'
 import { paginate, buildPaginationResult } from '@/common/utils'
 
 @Injectable()
 export class EventRepository {
-  constructor(
-    @InjectRepository(Event)
-    private eventRepository: Repository<Event>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query: GetEventsDto) {
     const { page, pageSize, eventType, appId, keyword } = query
     const { skip, take } = paginate(page, pageSize)
-
-    const where: any = {}
-
-    if (eventType) {
-      where.eventType = eventType
+    const where: Prisma.event_definitionWhereInput = {
+      status: 1,
+      ...(eventType && { event_type: eventType }),
+      ...(appId && { project_id: appId }),
+      ...(keyword && { event_name: { contains: keyword } }),
     }
 
-    if (appId) {
-      where.appId = appId
-    }
+    const [list, total] = await this.prisma.$transaction([
+      this.prisma.event_definition.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { created_at: 'desc' },
+      }),
+      this.prisma.event_definition.count({ where }),
+    ])
 
-    if (keyword) {
-      where.eventName = Raw((alias) => `${alias} ILIKE :keyword`, {
-        keyword: `%${keyword}%`,
-      })
-    }
+    return buildPaginationResult(
+      list.map((event) => ({ ...event, id: event.id.toString() })),
+      total,
+      page,
+      pageSize,
+    )
+  }
 
-    const [list, total] = await this.eventRepository.findAndCount({
-      where,
-      skip,
-      take,
-      order: { createdAt: 'DESC' },
+  async findById(id: string) {
+    const event = await this.prisma.event_definition.findFirst({
+      where: { id: BigInt(id), status: 1 },
     })
-
-    return buildPaginationResult(list, total, page, pageSize)
+    return event ? { ...event, id: event.id.toString() } : null
   }
 
-  async findById(id: string): Promise<Event | null> {
-    return this.eventRepository.findOne({ where: { id } })
+  create(data: CreateEventDto) {
+    return this.prisma.event_definition.create({
+      data: {
+        project_id: data.appId,
+        event_name: data.eventName,
+        event_type: data.eventType,
+        event_desc: data.description,
+        param_schema: data.propertySchema as Prisma.InputJsonValue,
+      },
+    })
   }
 
-  async create(data: Partial<Event>): Promise<Event> {
-    const event = this.eventRepository.create(data)
-    return this.eventRepository.save(event)
-  }
-
-  async update(id: string, data: Partial<Event>): Promise<Event | null> {
-    await this.eventRepository.update(id, data)
-    return this.findById(id)
+  update(id: string, data: UpdateEventDto) {
+    return this.prisma.event_definition.update({
+      where: { id: BigInt(id) },
+      data: {
+        ...(data.appId !== undefined && { project_id: data.appId }),
+        ...(data.eventName !== undefined && { event_name: data.eventName }),
+        ...(data.eventType !== undefined && { event_type: data.eventType }),
+        ...(data.description !== undefined && { event_desc: data.description }),
+        ...(data.propertySchema !== undefined && {
+          param_schema: data.propertySchema as Prisma.InputJsonValue,
+        }),
+        updated_at: new Date(),
+      },
+    })
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.eventRepository.softDelete(id)
+    await this.prisma.event_definition.update({
+      where: { id: BigInt(id) },
+      data: { status: 0, updated_at: new Date() },
+    })
   }
 }

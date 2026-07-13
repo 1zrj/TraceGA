@@ -11,10 +11,6 @@ export class UpdateEventDto {
 
   @IsOptional()
   @IsString()
-  category?: string
-
-  @IsOptional()
-  @IsString()
   description?: string
 
   @IsOptional()
