@@ -1,9 +1,8 @@
 import { ErrorPlugin } from '../plugins/error';
-import type { TraceConfig, CommonParams, ITraceCore, EnvInfo, TrackEventData, TracePlugin } from '../types';
+import type { TraceConfig, ITraceCore, EnvInfo, TrackEventData, TracePlugin } from '../types';
 
 export class TraceCore implements ITraceCore {
   private config: TraceConfig | null = null;
-  private commonParams: CommonParams = {};
   private envInfo: EnvInfo | null = null;
   private plugins: TracePlugin[] = [];
 
@@ -18,7 +17,7 @@ export class TraceCore implements ITraceCore {
     console.log('[TraceGA SDK] Registered with config:', config);
   }
 
-  trackEvent(eventName: string, params?: Record<string, any>): void {
+  trackEvent(eventType: string, eventName: string, params?: Record<string, any>): void {
     if (!this.config) {
       console.warn('[TraceGA SDK] Not registered, trackEvent ignored.');
       return;
@@ -29,25 +28,15 @@ export class TraceCore implements ITraceCore {
     }
 
     const event: TrackEventData = {
+      eventType,
       eventName,
+      appId: this.config.appId,
       timestamp: Date.now(),
-      customParams: params || {},
-      commonParams: this.commonParams,
-      envInfo: this.collectEnvInfo(),
+      properties: params || {},
+      url: this.getCurrentUrl(),
+      userAgent: this.getUserAgent(),
     };
     console.log('[TraceGA SDK] Event tracked:', event);
-  }
-
-  addCommonParams(params: CommonParams): void {
-    Object.assign(this.commonParams, params);
-  }
-
-  removeCommonParams(keys: string[]): void {
-    keys.forEach(key => delete this.commonParams[key]);
-  }
-
-  setUser(userId: string): void {
-    this.commonParams.user_id = userId;
   }
 
   getEnvInfo(): EnvInfo {
