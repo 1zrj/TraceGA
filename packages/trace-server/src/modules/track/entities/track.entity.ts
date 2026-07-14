@@ -1,3 +1,5 @@
+import { Entity, Column, PrimaryColumn, CreateDateColumn, Index } from 'typeorm'
+
 export interface TrackEvent {
   eventId?: string
   eventType: string
@@ -13,18 +15,48 @@ export interface TrackEvent {
   ip?: string
 }
 
-export interface TrackEventEntity {
-  event_id: string
-  event_type: string
-  event_name: string
-  app_id: string
-  user_id: string
-  session_id: string
-  properties: string
+@Entity('track_events')
+@Index(['appId'])
+@Index(['eventType'])
+@Index(['timestamp'])
+@Index(['userId'])
+export class TrackEntity {
+  @PrimaryColumn({ type: 'varchar', length: 36 })
+  eventId: string
+
+  @Column({ type: 'varchar', length: 50 })
+  eventType: string
+
+  @Column({ type: 'varchar', length: 100 })
+  eventName: string
+
+  @Column({ type: 'varchar', length: 50 })
+  appId: string
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  userId: string
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  sessionId: string
+
+  @Column({ type: 'json', nullable: true })
+  properties: Record<string, any>
+
+  @Column({ type: 'datetime' })
   timestamp: Date
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
   url: string
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
   referrer: string
-  user_agent: string
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  userAgent: string
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
   ip: string
-  created_at: Date
+
+  @CreateDateColumn({ type: 'datetime' })
+  createdAt: Date
 }

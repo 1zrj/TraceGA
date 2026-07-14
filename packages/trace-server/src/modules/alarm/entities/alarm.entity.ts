@@ -23,7 +23,7 @@ export class Alarm {
   @Column({ type: 'text', nullable: true })
   description: string
 
-  @Column({ type: 'jsonb', default: {} })
+  @Column({ type: 'json', nullable: true })
   conditions: Record<string, any>
 
   @Column({ default: true })

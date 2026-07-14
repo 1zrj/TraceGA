@@ -1,148 +1,97 @@
 import { Injectable } from '@nestjs/common'
-import { ClickHouseService } from '@/database/clickhouse.service'
+import { Repository } from 'typeorm'
+import { InjectRepository } from '@nestjs/typeorm'
+import { TrackEntity } from '../../track/entities/track.entity'
 import { AnalysisSummaryDto, AnalysisTrendDto, AnalysisFilterDto } from '../dto/analysis.dto'
 
 @Injectable()
 export class AnalysisRepository {
-  constructor(private readonly clickHouseService: ClickHouseService) {}
+  constructor(
+    @InjectRepository(TrackEntity)
+    private readonly trackRepository: Repository<TrackEntity>,
+  ) {}
 
   async getSummary(query: AnalysisSummaryDto) {
     const { appId, startTime, endTime } = query
 
-    let whereClause = '1=1'
-    const params: Record<string, any> = {}
+    const queryBuilder = this.trackRepository
+      .createQueryBuilder('t')
+      .select('COUNT(*)', 'pv')
+      .addSelect('COUNT(DISTINCT t.userId)', 'uv')
+      .addSelect('COUNT(DISTINCT t.eventName)', 'eventCount')
 
-    if (appId) {
-      whereClause += ' AND app_id = {appId:String}'
-      params.appId = appId
-    }
+    this.applyFilters(queryBuilder, appId, startTime, endTime)
 
-    if (startTime) {
-      whereClause += ' AND timestamp >= {startTime:DateTime}'
-      params.startTime = startTime
-    }
-
-    if (endTime) {
-      whereClause += ' AND timestamp <= {endTime:DateTime}'
-      params.endTime = endTime
-    }
-
-    const pvQuery = `
-      SELECT count() as pv
-      FROM events
-      WHERE ${whereClause}
-    `
-
-    const uvQuery = `
-      SELECT uniq(user_id) as uv
-      FROM events
-      WHERE ${whereClause}
-    `
-
-    const eventCountQuery = `
-      SELECT count(DISTINCT event_name) as event_count
-      FROM events
-      WHERE ${whereClause}
-    `
-
-    const [pvResult, uvResult, eventCountResult] = await Promise.all([
-      this.clickHouseService.query(pvQuery, params),
-      this.clickHouseService.query(uvQuery, params),
-      this.clickHouseService.query(eventCountQuery, params),
-    ])
+    const result = await queryBuilder.getRawOne()
 
     return {
-      pv: pvResult[0]?.pv || 0,
-      uv: uvResult[0]?.uv || 0,
-      eventCount: eventCountResult[0]?.event_count || 0,
+      pv: Number(result?.pv) || 0,
+      uv: Number(result?.uv) || 0,
+      eventCount: Number(result?.eventCount) || 0,
     }
   }
 
   async getTrend(query: AnalysisTrendDto) {
     const { appId, eventType, startTime, endTime, interval = 'day' } = query
 
-    let whereClause = '1=1'
-    const params: Record<string, any> = {}
-
-    if (appId) {
-      whereClause += ' AND app_id = {appId:String}'
-      params.appId = appId
+    let dateFormat = '%Y-%m-%d'
+    if (interval === 'hour') {
+      dateFormat = '%Y-%m-%d %H:00:00'
     }
+
+    const queryBuilder = this.trackRepository
+      .createQueryBuilder('t')
+      .select(`DATE_FORMAT(t.timestamp, '${dateFormat}')`, 'date')
+      .addSelect('COUNT(*)', 'pv')
+      .addSelect('COUNT(DISTINCT t.userId)', 'uv')
+
+    this.applyFilters(queryBuilder, appId, startTime, endTime)
 
     if (eventType) {
-      whereClause += ' AND event_type = {eventType:String}'
-      params.eventType = eventType
+      queryBuilder.andWhere('t.eventType = :eventType', { eventType })
     }
 
-    if (startTime) {
-      whereClause += ' AND timestamp >= {startTime:DateTime}'
-      params.startTime = startTime
-    }
+    queryBuilder.groupBy('date').orderBy('date', 'ASC')
 
-    if (endTime) {
-      whereClause += ' AND timestamp <= {endTime:DateTime}'
-      params.endTime = endTime
-    }
-
-    let timeFormat = '%Y-%m-%d'
-    if (interval === 'hour') {
-      timeFormat = '%Y-%m-%d %H:00:00'
-    } else if (interval === 'week') {
-      timeFormat = '%Y-%m-%d'
-    }
-
-    const queryStr = `
-      SELECT
-        formatDateTime(timestamp, '${timeFormat}') as date,
-        count() as pv,
-        uniq(user_id) as uv
-      FROM events
-      WHERE ${whereClause}
-      GROUP BY date
-      ORDER BY date ASC
-    `
-
-    return this.clickHouseService.query(queryStr, params)
+    return queryBuilder.getRawMany()
   }
 
   async getFiltered(query: AnalysisFilterDto) {
     const { appId, eventTypes, startTime, endTime } = query
 
-    let whereClause = '1=1'
-    const params: Record<string, any> = {}
+    const queryBuilder = this.trackRepository
+      .createQueryBuilder('t')
+      .select('t.eventName', 'event_name')
+      .addSelect('t.eventType', 'event_type')
+      .addSelect('COUNT(*)', 'count')
 
-    if (appId) {
-      whereClause += ' AND app_id = {appId:String}'
-      params.appId = appId
-    }
+    this.applyFilters(queryBuilder, appId, startTime, endTime)
 
     if (eventTypes && eventTypes.length > 0) {
-      whereClause += ' AND event_type IN ({eventTypes:Array(String)})'
-      params.eventTypes = eventTypes
+      queryBuilder.andWhere('t.eventType IN (:...eventTypes)', { eventTypes })
+    }
+
+    queryBuilder.groupBy('t.eventName, t.eventType').orderBy('count', 'DESC').limit(100)
+
+    return queryBuilder.getRawMany()
+  }
+
+  private applyFilters(
+    queryBuilder: ReturnType<typeof this.trackRepository.createQueryBuilder>,
+    appId?: string,
+    startTime?: string,
+    endTime?: string,
+  ) {
+    if (appId) {
+      queryBuilder.where('t.appId = :appId', { appId })
     }
 
     if (startTime) {
-      whereClause += ' AND timestamp >= {startTime:DateTime}'
-      params.startTime = startTime
+      queryBuilder.andWhere('t.timestamp >= :startTime', { startTime })
     }
 
     if (endTime) {
-      whereClause += ' AND timestamp <= {endTime:DateTime}'
-      params.endTime = endTime
+      queryBuilder.andWhere('t.timestamp <= :endTime', { endTime })
     }
-
-    const queryStr = `
-      SELECT
-        event_name,
-        event_type,
-        count() as count
-      FROM events
-      WHERE ${whereClause}
-      GROUP BY event_name, event_type
-      ORDER BY count DESC
-      LIMIT 100
-    `
-
-    return this.clickHouseService.query(queryStr, params)
   }
 }

@@ -24,7 +24,7 @@ export class Event {
   @Column({ type: 'text', nullable: true })
   description: string
 
-  @Column({ name: 'property_schema', type: 'jsonb', default: {} })
+  @Column({ name: 'property_schema', type: 'json', nullable: true })
   propertySchema: Record<string, any>
 
   @Column({ name: 'app_id' })

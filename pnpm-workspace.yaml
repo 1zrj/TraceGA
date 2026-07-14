@@ -4,5 +4,6 @@ packages:
   - "packages/trace-admin"
 allowBuilds:
   '@nestjs/core': true
-  esbuild: false
+  esbuild: true
   msw: true
+  sqlite3: set this to true or false

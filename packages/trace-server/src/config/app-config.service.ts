@@ -16,20 +16,10 @@ export class AppConfigService {
   get database() {
     return {
       host: this.configService.get<string>('DB_HOST', 'localhost'),
-      port: this.configService.get<number>('DB_PORT', 5432),
-      username: this.configService.get<string>('DB_USERNAME', 'postgres'),
-      password: this.configService.get<string>('DB_PASSWORD', 'postgres'),
+      port: this.configService.get<number>('DB_PORT', 3306),
+      username: this.configService.get<string>('DB_USERNAME', 'root'),
+      password: this.configService.get<string>('DB_PASSWORD', 'root'),
       database: this.configService.get<string>('DB_DATABASE', 'tracega'),
-    }
-  }
-
-  get clickhouse() {
-    return {
-      host: this.configService.get<string>('CLICKHOUSE_HOST', 'localhost'),
-      port: this.configService.get<number>('CLICKHOUSE_PORT', 8123),
-      username: this.configService.get<string>('CLICKHOUSE_USER', 'default'),
-      password: this.configService.get<string>('CLICKHOUSE_PASSWORD', ''),
-      database: this.configService.get<string>('CLICKHOUSE_DATABASE', 'tracega'),
     }
   }
 
