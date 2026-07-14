@@ -14,6 +14,9 @@ export class EventBuffer<T> {
    * @param maxSize - 缓冲区最大容量，必须为正整数
    */
   constructor(maxSize: number) {
+    if (maxSize <= 0) {
+      throw new Error('maxSize must be greater than 0');
+    }
     this.maxSize = maxSize;
     this.items = [];
   }
@@ -26,7 +29,7 @@ export class EventBuffer<T> {
    */
   push(item: T): void {
     if (this.items.length >= this.maxSize) {
-      this.items.shift();
+      this.pop();
     }
     this.items.push(item);
   }
