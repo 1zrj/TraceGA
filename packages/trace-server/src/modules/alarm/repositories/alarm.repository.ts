@@ -1,13 +1,17 @@
-import { Injectable, NotImplementedException } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+import { Alarm } from '../entities/alarm.entity'
 import { GetAlarmListDto } from '../dto/get-alarm-list.dto'
+import { buildPaginationResult } from '@/common/utils'
 
 @Injectable()
 export class AlarmRepository {
-  findAll(_query: GetAlarmListDto): never {
-    throw new NotImplementedException('云端 MySQL 尚未创建告警表')
+  async findAll(query: GetAlarmListDto) {
+    const { page = 1, pageSize = 20 } = query
+
+    return buildPaginationResult<Alarm>([], 0, page, pageSize)
   }
 
-  findById(_id: string): never {
-    throw new NotImplementedException('云端 MySQL 尚未创建告警表')
+  async findById(id: string): Promise<Alarm | null> {
+    return null
   }
 }

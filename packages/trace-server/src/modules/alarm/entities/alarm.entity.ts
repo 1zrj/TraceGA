@@ -1,13 +1,13 @@
-export interface Alarm {
+export class Alarm {
   id: string
   alarmName: string
   alarmType: string
   eventName: string
-  description?: string
-  conditions: Record<string, unknown>
+  description: string | null
+  conditions: Record<string, any>
   enabled: boolean
   appId: string
-  triggeredAt?: Date
-  createdAt: Date
-  updatedAt: Date
+  triggeredAt: Date | null
+  createdAt: Date | null
+  updatedAt: Date | null
 }
