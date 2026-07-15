@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model event_definition {
+  id           BigInt    @id @default(autoincrement())
+  project_id   String    @db.VarChar(64)
+  event_name   String    @db.VarChar(128)
+  event_type   String?   @db.VarChar(64)
+  event_desc   String?   @db.VarChar(255)
+  param_schema Json?
+  status       Int?      @default(1) @db.TinyInt
+  created_at   DateTime? @default(now()) @db.DateTime(0)
+  updated_at   DateTime? @default(now()) @updatedAt @db.DateTime(0)
+}
+
+model event_daily_stat {
+  id         BigInt    @id @default(autoincrement())
+  stat_date  DateTime  @db.Date
+  project_id String    @db.VarChar(64)
+  event_name String    @db.VarChar(128)
+  pv         BigInt?   @default(0)
+  uv         BigInt?   @default(0)
+  created_at DateTime? @default(now()) @db.DateTime(0)
+
+  @@index([project_id, event_name, stat_date], map: "idx_daily_project_event_date")
+}
+
+model event_log {
+  id            BigInt    @id @default(autoincrement())
+  project_id    String    @db.VarChar(64)
+  event_name    String    @db.VarChar(128)
+  event_type    String?   @db.VarChar(64)
+  uid           String?   @db.VarChar(128)
+  session_id    String?   @db.VarChar(128)
+  page_url      String?   @db.VarChar(512)
+  event_params  Json?
+  common_params Json?
+  user_agent    String?   @db.Text
+  ip            String?   @db.VarChar(64)
+  created_at    DateTime? @default(now()) @db.DateTime(0)
+
+  @@index([page_url], map: "idx_event_page_url")
+  @@index([project_id, event_name, created_at], map: "idx_event_project_name_time")
+  @@index([project_id, event_name, uid, created_at], map: "idx_event_project_name_uid_time")
+}
+
+model project {
+  id           BigInt    @id @default(autoincrement())
+  project_id   String    @unique(map: "project_id") @db.VarChar(64)
+  project_name String    @db.VarChar(128)
+  owner        String?   @db.VarChar(64)
+  created_at   DateTime? @default(now()) @db.DateTime(0)
+}

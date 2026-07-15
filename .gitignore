@@ -1,5 +1,6 @@
 node_modules/
 dist/
+packages/trace-server/src/generated/
 build/
 *.tsbuildinfo
 .vite/
