@@ -1,0 +1,257 @@
+import { EventBuffer } from './EventBuffer';
+import type { TrackEventData } from '../types';
+
+export type Priority = 'urgent' | 'high' | 'normal';
+
+export interface PrioritySchedulerConfig {
+  /** 普通 & 高优先级队列的最大容量（默认值） */
+  maxBufferSize: number;
+  /** 紧急队列的独立最大容量，默认与 maxBufferSize 一致 */
+  urgentMaxSize?: number;
+  /** 定时上报间隔（毫秒） */
+  flushInterval: number;
+  /** 上报回调，接收按优先级排序的事件数组 */
+  onFlush: (events: TrackEventData[]) => Promise<void>;
+  /** requestIdleCallback 降级超时（毫秒），默认 3000 */
+  idleTimeoutFallback?: number;
+}
+
+/**
+ * 优先级调度器，基于三队列实现优先级上报与空闲调度。
+ *
+ * 三队列优先级：urgent > high > normal
+ *
+ * 上报顺序：
+ * - 每次 `onFlush` 时，按 urgent → high → normal 顺序拼接全部数据
+ *
+ * 触发机制：
+ * - **定时触发**：每隔 `flushInterval` 毫秒执行全量上报
+ * - **阈值触发**：任一队列满时立即全量上报，并重置定时器
+ * - **空闲调度**：使用 `requestIdleCallback`（降级为 `setTimeout`）
+ *   在浏览器空闲时仅上报 normal 队列，不触发 urgent/high
+ */
+export class PriorityScheduler {
+  private urgentBuffer: EventBuffer<TrackEventData>;
+  private highBuffer: EventBuffer<TrackEventData>;
+  private normalBuffer: EventBuffer<TrackEventData>;
+  private maxBufferSize: number;
+  private urgentMaxSize: number;
+  private flushInterval: number;
+  private onFlush: (events: TrackEventData[]) => Promise<void>;
+  private idleTimeoutFallback: number;
+  private timerId: ReturnType<typeof setTimeout> | null;
+  private idleId: number | null;
+  private flushing: boolean;
+
+  constructor(config: PrioritySchedulerConfig) {
+    this.maxBufferSize = config.maxBufferSize;
+    this.urgentMaxSize = config.urgentMaxSize ?? config.maxBufferSize;
+    this.flushInterval = config.flushInterval;
+    this.onFlush = config.onFlush;
+    this.idleTimeoutFallback = config.idleTimeoutFallback ?? 3000;
+    this.timerId = null;
+    this.idleId = null;
+    this.flushing = false;
+
+    this.urgentBuffer = new EventBuffer<TrackEventData>(this.urgentMaxSize);
+    this.highBuffer = new EventBuffer<TrackEventData>(this.maxBufferSize);
+    this.normalBuffer = new EventBuffer<TrackEventData>(this.maxBufferSize);
+
+    this.scheduleNext();
+    this.scheduleIdle();
+  }
+
+  /**
+   * 按优先级向对应队列添加一条事件。
+   * 若该队列达到容量上限，立即触发全量上报并重置定时器。
+   *
+   * @param priority - 优先级：`'urgent'` | `'high'` | `'normal'`
+   * @param event - 待添加的埋点事件
+   */
+  add(priority: Priority, event: TrackEventData): void {
+    const buffer = this.getBuffer(priority);
+    buffer.push(event);
+
+    if (this.shouldThresholdFlush(priority)) {
+      this.clearTimer();
+      this.doFlushAndSchedule();
+    }
+  }
+
+  /**
+   * 手动立即触发全量上报，取出所有队列数据合并后传递给 `onFlush`。
+   * 执行后重置定时器。
+   */
+  flush(): void {
+    this.clearTimer();
+    this.doFlushAndSchedule();
+  }
+
+  /**
+   * 销毁调度器，清除定时器、空闲回调并清空所有缓冲区。
+   */
+  destroy(): void {
+    this.clearTimer();
+    this.cancelIdle();
+    this.urgentBuffer.clear();
+    this.highBuffer.clear();
+    this.normalBuffer.clear();
+  }
+
+  // ─── 定时器 ────────────────────────────────────────
+
+  /**
+   * 安排下一次定时全量上报。
+   */
+  private scheduleNext(): void {
+    this.timerId = setTimeout(() => {
+      this.doScheduledFlush();
+    }, this.flushInterval);
+  }
+
+  /**
+   * 清除当前定时器。
+   */
+  private clearTimer(): void {
+    if (this.timerId !== null) {
+      clearTimeout(this.timerId);
+      this.timerId = null;
+    }
+  }
+
+  /**
+   * 定时触发的全量上报，完成后安排下一次。
+   */
+  private async doScheduledFlush(): Promise<void> {
+    await this.doFlush();
+    this.scheduleNext();
+  }
+
+  /**
+   * 阈值/手动触发后的全量上报，完成后重新安排定时器。
+   */
+  private async doFlushAndSchedule(): Promise<void> {
+    await this.doFlush();
+    this.scheduleNext();
+  }
+
+  // ─── 空闲调度 ──────────────────────────────────────
+
+  /**
+   * 注册空闲回调：使用 `requestIdleCallback`，降级为 `setTimeout`。
+   */
+  private scheduleIdle(): void {
+    if (typeof window !== 'undefined' && typeof (window as any).requestIdleCallback === 'function') {
+      this.idleId = (window as any).requestIdleCallback(
+        (deadline: IdleDeadline) => this.onIdle(deadline),
+        { timeout: this.idleTimeoutFallback }
+      );
+    } else {
+      this.idleId = setTimeout(() => {
+        this.onIdleFallback();
+      }, this.idleTimeoutFallback) as unknown as number;
+    }
+  }
+
+  /**
+   * 取消当前空闲回调。
+   */
+  private cancelIdle(): void {
+    if (this.idleId !== null) {
+      if (typeof window !== 'undefined' && typeof (window as any).cancelIdleCallback === 'function') {
+        (window as any).cancelIdleCallback(this.idleId);
+      } else {
+        clearTimeout(this.idleId);
+      }
+      this.idleId = null;
+    }
+  }
+
+  /**
+   * 空闲回调：仅取出 normal 队列数据上报，upper 级别不受影响。
+   */
+  private async onIdle(_deadline: IdleDeadline): Promise<void> {
+    await this.flushNormalOnly();
+    this.scheduleIdle();
+  }
+
+  /**
+   * 降级方案的空闲回调（setTimeout 模式）。
+   */
+  private async onIdleFallback(): Promise<void> {
+    await this.flushNormalOnly();
+    this.scheduleIdle();
+  }
+
+  /**
+   * 仅上报 normal 队列数据，不触及 urgent/high。
+   */
+  private async flushNormalOnly(): Promise<void> {
+    if (this.flushing) return;
+
+    const events = this.normalBuffer.takeAll();
+    if (events.length === 0) return;
+
+    this.flushing = true;
+    try {
+      await this.onFlush(events);
+    } finally {
+      this.flushing = false;
+    }
+  }
+
+  // ─── 全量上报 ──────────────────────────────────────
+
+  /**
+   * 执行全量上报：按 urgent → high → normal 顺序拼接所有队列数据。
+   * 使用 `flushing` 锁防止并发。
+   */
+  private async doFlush(): Promise<void> {
+    if (this.flushing) return;
+
+    const events = [
+      ...this.urgentBuffer.takeAll(),
+      ...this.highBuffer.takeAll(),
+      ...this.normalBuffer.takeAll(),
+    ];
+
+    if (events.length === 0) return;
+
+    this.flushing = true;
+    try {
+      await this.onFlush(events);
+    } finally {
+      this.flushing = false;
+    }
+  }
+
+  // ─── 辅助 ──────────────────────────────────────────
+
+  /**
+   * 根据优先级返回对应的缓冲区。
+   */
+  private getBuffer(priority: Priority): EventBuffer<TrackEventData> {
+    switch (priority) {
+      case 'urgent':
+        return this.urgentBuffer;
+      case 'high':
+        return this.highBuffer;
+      case 'normal':
+        return this.normalBuffer;
+    }
+  }
+
+  /**
+   * 判断对应优先级队列是否已达到阈值，应触发全量上报。
+   */
+  private shouldThresholdFlush(priority: Priority): boolean {
+    switch (priority) {
+      case 'urgent':
+        return this.urgentBuffer.size() >= this.urgentMaxSize;
+      case 'high':
+        return this.highBuffer.size() >= this.maxBufferSize;
+      case 'normal':
+        return this.normalBuffer.size() >= this.maxBufferSize;
+    }
+  }
+}
