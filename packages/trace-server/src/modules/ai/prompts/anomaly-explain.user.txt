@@ -1,0 +1,8 @@
+事件异常分析请求：
+- 事件名称：{{eventName}}
+- 当前值：{{currentValue}}（{{compareLabel}}）
+- 对比值：{{previousValue}}
+- 变化幅度：{{changePercent}}%
+
+补充上下文：
+{{contextLines}}
