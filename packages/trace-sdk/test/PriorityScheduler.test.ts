@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PriorityScheduler } from '../src/core/PriorityScheduler';
+import { StoragePersister } from '../src/utils/StoragePersister';
 import type { TrackEventData } from '../src/types';
 
 function makeEvent(name: string): TrackEventData {
@@ -275,6 +276,64 @@ describe('PriorityScheduler', () => {
       await vi.advanceTimersByTimeAsync(10000);
       await vi.advanceTimersByTimeAsync(0);
       expect(onFlush).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('persister 缓存恢复', () => {
+    it('should recover cached failed data as urgent on init', async () => {
+      // 模拟缓存一条失败数据
+      const persister = new StoragePersister();
+      persister.save('trace_failed_cache', { eventName: 'cached_event', timestamp: 1, customParams: {}, commonParams: {}, envInfo: {} as any });
+
+      const onFlush = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal('requestIdleCallback', () => 1);
+      vi.stubGlobal('cancelIdleCallback', vi.fn());
+
+      const scheduler = new PriorityScheduler({
+        maxBufferSize: 10,
+        flushInterval: 5000,
+        onFlush,
+        persister,
+      });
+
+      // recoverFailedCache 会立即触发一次全量上报
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(onFlush).toHaveBeenCalledTimes(1);
+      const names = onFlush.mock.calls[0][0].map((e: TrackEventData) => e.eventName);
+      expect(names).toContain('cached_event');
+
+      // 缓存已被清除
+      const cached = persister.load('trace_failed_cache');
+      expect(cached).toBeNull();
+    });
+
+    it('should recover multiple cached events as urgent', async () => {
+      const persister = new StoragePersister();
+      persister.save('trace_failed_cache', [
+        { eventName: 'f1', timestamp: 1, customParams: {}, commonParams: {}, envInfo: {} as any },
+        { eventName: 'f2', timestamp: 2, customParams: {}, commonParams: {}, envInfo: {} as any },
+      ]);
+
+      const onFlush = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal('requestIdleCallback', () => 1);
+      vi.stubGlobal('cancelIdleCallback', vi.fn());
+
+      const scheduler = new PriorityScheduler({
+        maxBufferSize: 10,
+        flushInterval: 5000,
+        onFlush,
+        persister,
+      });
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(onFlush).toHaveBeenCalledTimes(1);
+      const names = onFlush.mock.calls[0][0].map((e: TrackEventData) => e.eventName);
+      expect(names).toEqual(['f1', 'f2']);
+
+      const cached = persister.load('trace_failed_cache');
+      expect(cached).toBeNull();
     });
   });
 });

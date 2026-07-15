@@ -1,3 +1,5 @@
+import type { StoragePersister } from '../utils/StoragePersister';
+
 /**
  * 超时错误，当请求超过配置的超时时间时抛出。
  */
@@ -13,6 +15,8 @@ export interface HttpTransporterConfig {
   headers?: Record<string, string>;
   /** 超时时间（毫秒），默认 10000 */
   timeout?: number;
+  /** 持久化工具，用于重试全部失败后缓存数据 */
+  persister?: StoragePersister;
 }
 
 /**
@@ -29,6 +33,7 @@ export class HttpTransporter {
   private timeout: number;
   private maxRetries: number;
   private retryDelays: number[];
+  private persister: StoragePersister | undefined;
 
   constructor(config: HttpTransporterConfig) {
     this.baseURL = config.baseURL;
@@ -36,6 +41,7 @@ export class HttpTransporter {
     this.timeout = config.timeout ?? 10000;
     this.maxRetries = 3;
     this.retryDelays = [1000, 2000, 4000];
+    this.persister = config.persister;
   }
 
   /**
@@ -63,6 +69,8 @@ export class HttpTransporter {
         await this.delay(this.retryDelays[attempt]);
         return this.requestWithRetry(data, attempt + 1);
       }
+      // 全部重试失败，缓存数据到 localStorage
+      this.persister?.save('trace_failed_cache', data);
       throw error;
     }
   }

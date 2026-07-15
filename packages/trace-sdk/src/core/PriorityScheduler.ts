@@ -1,5 +1,6 @@
 import { EventBuffer } from './EventBuffer';
 import type { TrackEventData } from '../types';
+import type { StoragePersister } from '../utils/StoragePersister';
 
 export type Priority = 'urgent' | 'high' | 'normal';
 
@@ -14,6 +15,8 @@ export interface PrioritySchedulerConfig {
   onFlush: (events: TrackEventData[]) => Promise<void>;
   /** requestIdleCallback 降级超时（毫秒），默认 3000 */
   idleTimeoutFallback?: number;
+  /** 持久化工具，用于初始化时补发 localStorage 中残留的失败缓存 */
+  persister?: StoragePersister;
 }
 
 /**
@@ -42,6 +45,7 @@ export class PriorityScheduler {
   private timerId: ReturnType<typeof setTimeout> | null;
   private idleId: number | null;
   private flushing: boolean;
+  private persister: StoragePersister | undefined;
 
   constructor(config: PrioritySchedulerConfig) {
     this.maxBufferSize = config.maxBufferSize;
@@ -52,6 +56,7 @@ export class PriorityScheduler {
     this.timerId = null;
     this.idleId = null;
     this.flushing = false;
+    this.persister = config.persister;
 
     this.urgentBuffer = new EventBuffer<TrackEventData>(this.urgentMaxSize);
     this.highBuffer = new EventBuffer<TrackEventData>(this.maxBufferSize);
@@ -59,6 +64,7 @@ export class PriorityScheduler {
 
     this.scheduleNext();
     this.scheduleIdle();
+    this.recoverFailedCache();
   }
 
   /**
@@ -116,6 +122,32 @@ export class PriorityScheduler {
     if (this.timerId !== null) {
       clearTimeout(this.timerId);
       this.timerId = null;
+    }
+  }
+
+  /**
+   * 初始化时检查 localStorage 残留缓存，若存在则立即以 urgent 优先级补发。
+   * 补发后清除缓存，防止重复上报。
+   */
+  private recoverFailedCache(): void {
+    if (!this.persister) return;
+
+    const cached = this.persister.load('trace_failed_cache');
+    if (!cached) return;
+
+    // 支持单个事件或事件数组
+    const events: TrackEventData[] = Array.isArray(cached) ? cached : [cached];
+    for (const event of events) {
+      this.urgentBuffer.push(event);
+    }
+
+    // 清除已读取的缓存
+    this.persister.clear('trace_failed_cache');
+
+    // 若有缓存数据，立即触发一次全量上报
+    if (this.urgentBuffer.size() > 0) {
+      this.clearTimer();
+      this.doFlushAndSchedule();
     }
   }
 

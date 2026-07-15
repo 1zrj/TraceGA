@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HttpTransporter, TimeoutError } from '../src/core/HttpTransporter';
+import { StoragePersister } from '../src/utils/StoragePersister';
 
 describe('HttpTransporter', () => {
   beforeEach(() => {
@@ -142,6 +143,35 @@ describe('HttpTransporter', () => {
       await vi.runAllTimersAsync();
 
       await assertion;
+    });
+  });
+
+  describe('persister integration', () => {
+    it('should cache data to localStorage after all retries exhausted', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(null, { status: 500, statusText: 'Internal Server Error' })
+      );
+      vi.stubGlobal('fetch', mockFetch);
+
+      const persister = new StoragePersister();
+      const transporter = new HttpTransporter({
+        baseURL: 'https://api.example.com/report',
+        persister,
+      });
+
+      const promise = transporter.send({ event: 'failed_test' });
+      const assertion = expect(promise).rejects.toThrow('HTTP 500');
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(4000);
+      await vi.runAllTimersAsync();
+
+      await assertion;
+
+      // 验证 localStorage 中已缓存数据
+      const cached = persister.load('trace_failed_cache');
+      expect(cached).toEqual({ event: 'failed_test' });
     });
   });
 });
