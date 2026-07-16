@@ -12,5 +12,20 @@ services:
     profiles:
       - mysql
 
+  tracega-clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: tracega-clickhouse
+    ports:
+      - '8123:8123'
+      - '9000:9000'
+    environment:
+      CLICKHOUSE_DB: tracega
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    profiles:
+      - clickhouse
+
 volumes:
   mysql_data:
+  clickhouse_data:

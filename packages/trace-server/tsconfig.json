@@ -21,7 +21,7 @@
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
     "paths": {
-      "@/*": ["src/*"]
+      "@generated/prisma": ["./dist/generated/prisma"]
     }
   },
   "include": ["src/**/*"],

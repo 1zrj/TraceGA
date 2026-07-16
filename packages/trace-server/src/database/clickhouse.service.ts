@@ -6,11 +6,12 @@ export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
   private client: ReturnType<typeof createClient> | null = null
 
   async onModuleInit() {
-    const url = process.env.CLICKHOUSE_URL || 'http://localhost:8123'
-    const database = process.env.CLICKHOUSE_DB || 'default'
+    const host = process.env.CLICKHOUSE_HOST || 'localhost'
+    const port = process.env.CLICKHOUSE_PORT || '8123'
+    const database = process.env.CLICKHOUSE_DATABASE || 'default'
 
     this.client = createClient({
-      host: url,
+      host: `http://${host}:${port}`,
       database,
     })
   }

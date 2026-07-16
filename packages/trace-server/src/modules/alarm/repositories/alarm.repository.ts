@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common'
-import { Prisma } from '@/generated/prisma'
-import { PrismaService } from '@/database/prisma.service'
+import { Prisma } from '@generated/prisma'
+import { PrismaService } from '../../../database/prisma.service'
 import { Alarm } from '../entities/alarm.entity'
 import { GetAlarmListDto } from '../dto/get-alarm-list.dto'
-import { paginate, buildPaginationResult } from '@/common/utils'
+import { paginate, buildPaginationResult } from '../../../common/utils'
 
 @Injectable()
 export class AlarmRepository {
