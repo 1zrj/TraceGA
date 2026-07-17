@@ -1,0 +1,31 @@
+services:
+  tracega-mysql:
+    image: mysql:8.0
+    container_name: tracega-mysql
+    ports:
+      - '3306:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: tracega
+    volumes:
+      - mysql_data:/var/lib/mysql
+    profiles:
+      - mysql
+
+  tracega-clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: tracega-clickhouse
+    ports:
+      - '8123:8123'
+      - '9000:9000'
+    environment:
+      CLICKHOUSE_DB: tracega
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    profiles:
+      - clickhouse
+
+volumes:
+  mysql_data:
+  clickhouse_data:

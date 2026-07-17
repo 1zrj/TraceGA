@@ -1,49 +1,44 @@
 import { Injectable } from '@nestjs/common'
-import { ClickHouseService } from '@/database/clickhouse.service'
-import { TrackEvent, TrackEventEntity } from '../entities/track.entity'
-import { generateId } from '@/common/utils'
+import { PrismaService } from '../../../database/prisma.service'
+import { TrackEvent } from '../entities/track.entity'
 
 @Injectable()
 export class TrackRepository {
-  constructor(private readonly clickHouseService: ClickHouseService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async insertEvent(event: TrackEvent, ip: string, userAgent: string): Promise<void> {
-    const entity: TrackEventEntity = {
-      event_id: event.eventId || generateId('evt'),
-      event_type: event.eventType,
-      event_name: event.eventName,
-      app_id: event.appId,
-      user_id: event.userId || '',
-      session_id: event.sessionId || '',
-      properties: JSON.stringify(event.properties || {}),
-      timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
-      url: event.url || '',
-      referrer: event.referrer || '',
-      user_agent: userAgent,
-      ip,
-      created_at: new Date(),
-    }
-
-    await this.clickHouseService.insert('events', [entity])
+    await this.prisma.event_log.create({
+      data: {
+        project_id: event.appId,
+        event_name: event.eventName,
+        event_type: event.eventType,
+        uid: event.userId || '',
+        session_id: event.sessionId || '',
+        page_url: event.url || '',
+        event_params: event.properties || {},
+        common_params: {},
+        user_agent: userAgent || '',
+        ip: ip || '',
+      },
+    })
   }
 
   async insertBatch(events: TrackEvent[], ip: string, userAgent: string): Promise<void> {
-    const entities: TrackEventEntity[] = events.map((event) => ({
-      event_id: event.eventId || generateId('evt'),
-      event_type: event.eventType,
+    const data = events.map((event) => ({
+      project_id: event.appId,
       event_name: event.eventName,
-      app_id: event.appId,
-      user_id: event.userId || '',
+      event_type: event.eventType,
+      uid: event.userId || '',
       session_id: event.sessionId || '',
-      properties: JSON.stringify(event.properties || {}),
-      timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
-      url: event.url || '',
-      referrer: event.referrer || '',
-      user_agent: userAgent,
-      ip,
-      created_at: new Date(),
+      page_url: event.url || '',
+      event_params: event.properties || {},
+      common_params: {},
+      user_agent: userAgent || '',
+      ip: ip || '',
     }))
 
-    await this.clickHouseService.insert('events', entities)
+    await this.prisma.event_log.createMany({
+      data,
+    })
   }
 }

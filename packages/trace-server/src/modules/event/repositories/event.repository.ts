@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common'
-import { Prisma } from '@/generated/prisma'
-import { PrismaService } from '@/database/prisma.service'
+import { Prisma } from '@generated/prisma'
+import { PrismaService } from '../../../database/prisma.service'
 import { Event } from '../entities/event.entity'
 import { GetEventsDto } from '../dto/get-events.dto'
 import { CreateEventDto } from '../dto/create-event.dto'
 import { UpdateEventDto } from '../dto/update-event.dto'
-import { paginate, buildPaginationResult } from '@/common/utils'
+import { paginate, buildPaginationResult } from '../../../common/utils'
 
 @Injectable()
 export class EventRepository {

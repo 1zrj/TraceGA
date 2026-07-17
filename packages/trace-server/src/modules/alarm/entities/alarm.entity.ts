@@ -1,13 +1,11 @@
 export class Alarm {
   id: string
-  alarmName: string
-  alarmType: string
-  eventName: string
-  description: string | null
-  conditions: Record<string, any>
-  enabled: boolean
   appId: string
-  triggeredAt: Date | null
+  eventName: string
+  threshold: number
+  operator: string
+  notifyType: string
+  status: number
   createdAt: Date | null
   updatedAt: Date | null
 }
