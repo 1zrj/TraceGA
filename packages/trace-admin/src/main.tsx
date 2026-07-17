@@ -2,12 +2,9 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { router } from '@/routes/index'
+import { startMockIfEnabled } from '@/mocks'
 
-if (import.meta.env.DEV) {
-  import('./mocks/browser').then((module) => {
-    module.worker.start()
-  })
-}
+startMockIfEnabled()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

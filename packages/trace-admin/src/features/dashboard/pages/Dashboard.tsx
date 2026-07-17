@@ -4,6 +4,7 @@ import ReactECharts from 'echarts-for-react'
 import { getSummary, getTrend } from '@/api'
 import type { AnalyticsOverview, TrendData } from '@/types'
 import { StatCard } from '@/components'
+import { AiAssistantPanel } from '../components/AiAssistantPanel'
 
 export const Dashboard: React.FC = () => {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null)
@@ -98,6 +99,8 @@ export const Dashboard: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      <AiAssistantPanel />
     </div>
   )
 }
