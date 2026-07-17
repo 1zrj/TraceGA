@@ -99,6 +99,26 @@ export class PriorityScheduler {
   }
 
   /**
+   * 暂停调度器定时器（不清空缓冲区），供页面隐藏时使用。
+   */
+  pause(): void {
+    this.clearTimer();
+  }
+
+  /**
+   * 取出所有队列中的全部数据（不触发上报），用于页面隐藏时通过 sendBeacon 发送。
+   *
+   * @returns 按 urgent → high → normal 顺序拼接的事件数组
+   */
+  takeAll(): TrackEventData[] {
+    return [
+      ...this.urgentBuffer.takeAll(),
+      ...this.highBuffer.takeAll(),
+      ...this.normalBuffer.takeAll(),
+    ];
+  }
+
+  /**
    * 销毁调度器，清除定时器、空闲回调并清空所有缓冲区。
    */
   destroy(): void {
@@ -158,17 +178,27 @@ export class PriorityScheduler {
 
   /**
    * 定时触发的全量上报，完成后安排下一次。
+   * 上报失败静默处理（已在 transporter 中完成重试/缓存）。
    */
   private async doScheduledFlush(): Promise<void> {
-    await this.doFlush();
+    try {
+      await this.doFlush();
+    } catch {
+      // 上报失败已在 transporter 中处理
+    }
     this.scheduleNext();
   }
 
   /**
    * 阈值/手动触发后的全量上报，完成后重新安排定时器。
+   * 上报失败静默处理（已在 transporter 中完成重试/缓存）。
    */
   private async doFlushAndSchedule(): Promise<void> {
-    await this.doFlush();
+    try {
+      await this.doFlush();
+    } catch {
+      // 上报失败已在 transporter 中处理
+    }
     this.scheduleNext();
   }
 

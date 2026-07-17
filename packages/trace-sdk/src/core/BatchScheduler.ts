@@ -84,17 +84,27 @@ export class BatchScheduler {
 
   /**
    * 定时触发的上报：执行上报后安排下一次。
+   * 上报失败静默处理（已在 transporter 中完成重试/缓存）。
    */
   private async doScheduledFlush(): Promise<void> {
-    await this.doFlush();
+    try {
+      await this.doFlush();
+    } catch {
+      // 上报失败已在 transporter 中处理
+    }
     this.scheduleNext();
   }
 
   /**
    * 阈值/手动触发后，执行上报并重新安排定时器。
+   * 上报失败静默处理（已在 transporter 中完成重试/缓存）。
    */
   private async doFlushAndSchedule(): Promise<void> {
-    await this.doFlush();
+    try {
+      await this.doFlush();
+    } catch {
+      // 上报失败已在 transporter 中处理
+    }
     this.scheduleNext();
   }
 
