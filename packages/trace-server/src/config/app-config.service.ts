@@ -15,11 +15,7 @@ export class AppConfigService {
 
   get database() {
     return {
-      host: this.configService.get<string>('DB_HOST', 'localhost'),
-      port: this.configService.get<number>('DB_PORT', 5432),
-      username: this.configService.get<string>('DB_USERNAME', 'postgres'),
-      password: this.configService.get<string>('DB_PASSWORD', 'postgres'),
-      database: this.configService.get<string>('DB_DATABASE', 'tracega'),
+      url: this.configService.get<string>('DATABASE_URL', ''),
     }
   }
 
