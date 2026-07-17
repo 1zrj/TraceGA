@@ -39,31 +39,30 @@ export class AiAnalyzeService {
       }),
     ])
 
-    if (query.question) {
+    const userQuestion = query.question ?? query.prompt ?? ''
+
+    if (userQuestion) {
       try {
-        const aiReply = await this.callAI(query.question, summary, trend)
+        const aiReply = await this.callAI(userQuestion, summary, trend)
         return {
-          insight: aiReply.insight,
+          conclusion: aiReply.insight,
           suggestions: aiReply.suggestions,
-          metrics: summary,
-          trend,
+          data: {},
         }
       } catch (err) {
         this.logger.error('GLM API 调用失败', err)
         return {
-          insight: 'AI 分析暂时不可用，以下是原始数据供参考。',
+          conclusion: 'AI 分析暂时不可用，以下是原始数据供参考。',
           suggestions: ['请检查 GLM_API_KEY 配置是否正确'],
-          metrics: summary,
-          trend,
+          data: {},
         }
       }
     }
 
     return {
-      insight: '请提供一个具体问题以获得 AI 分析。',
+      conclusion: '请提供一个具体问题以获得 AI 分析。',
       suggestions: [],
-      metrics: summary,
-      trend,
+      data: {},
     }
   }
 

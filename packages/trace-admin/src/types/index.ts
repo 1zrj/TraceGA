@@ -171,6 +171,7 @@ export interface AlarmQueryDto {
 
 export interface AiAnalyzeDto {
   prompt: string
+  question?: string
   startTime?: string
   endTime?: string
   appId?: string

@@ -39,20 +39,44 @@ export class AnalysisRepository {
   async getTrend(query: AnalysisTrendDto) {
     const { appId, eventType, startTime, endTime, interval = 'day' } = query
 
-    const dateFormat = interval === 'hour' ? '%Y-%m-%d %H:00:00' : '%Y-%m-%d'
+    const where = this.buildEventLogWhere(appId, startTime, endTime)
 
-    const result = await this.prisma.$queryRaw`
-      SELECT 
-        DATE_FORMAT(created_at, ${dateFormat}) as date,
-        COUNT(*) as pv,
-        COUNT(DISTINCT uid) as uv
-      FROM event_log
-      ${this.buildRawWhere(appId, startTime, endTime, eventType)}
-      GROUP BY date
-      ORDER BY date ASC
-    `
+    if (eventType) {
+      where.event_type = eventType
+    }
 
-    return result as Array<{ date: string; pv: number; uv: number }>
+    const logs = await this.prisma.event_log.findMany({
+      where,
+      select: {
+        created_at: true,
+        uid: true,
+      },
+    })
+
+    // 统一日期格式
+    const fmt = interval === 'hour' ? 'yyyy-MM-dd HH:00:00' : 'yyyy-MM-dd'
+    const map = new Map<string, { pv: number; uv: Set<string> }>()
+
+    for (const log of logs) {
+      let key: string
+      const d = new Date(log.created_at)
+      if (interval === 'hour') {
+        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:00:00`
+      } else {
+        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      }
+
+      if (!map.has(key)) {
+        map.set(key, { pv: 0, uv: new Set() })
+      }
+      const entry = map.get(key)!
+      entry.pv++
+      entry.uv.add(log.uid)
+    }
+
+    return Array.from(map.entries())
+      .map(([date, { pv, uv }]) => ({ time: date, pv, uv: uv.size }))
+      .sort((a, b) => a.time.localeCompare(b.time))
   }
 
   async getFiltered(query: AnalysisFilterDto) {

@@ -7,7 +7,16 @@ export class AnalysisService {
   constructor(private readonly analysisRepository: AnalysisRepository) {}
 
   async getSummary(query: AnalysisSummaryDto) {
-    return this.analysisRepository.getSummary(query)
+    const { pv, uv, eventCount } = await this.analysisRepository.getSummary(query)
+    const rate = uv > 0 ? (pv / uv).toFixed(1) : '0'
+    return {
+      pv,
+      uv,
+      rate,
+      startTime: query.startTime ?? '',
+      endTime: query.endTime ?? '',
+      eventCount,
+    }
   }
 
   async getTrend(query: AnalysisTrendDto) {

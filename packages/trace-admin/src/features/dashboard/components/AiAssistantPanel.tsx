@@ -57,7 +57,7 @@ export const AiAssistantPanel: React.FC = () => {
 
     setLoading(true)
     try {
-      const res = await analyze({ prompt: text })
+      const res = await analyze({ prompt: text, question: text })
       setMessages((prev) => [
         ...prev,
         { id: uid(), role: 'assistant', content: formatResult(res) },
