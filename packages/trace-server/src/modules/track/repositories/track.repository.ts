@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { Prisma } from '@/generated/prisma'
+import { Prisma } from '@generated/prisma'
 import { PrismaService } from '@/database/prisma.service'
 import { TrackEvent } from '../entities/track.entity'
 
@@ -19,23 +19,15 @@ export class TrackRepository {
     }
 
     await this.prisma.event_log.createMany({
-      data: events.map((event) => this.toEventLogCreateManyInput(event, ip, userAgent)),
+      data: events.map(event => this.toEventLogCreateManyInput(event, ip, userAgent)),
     })
   }
 
-  private toEventLogCreateInput(
-    event: TrackEvent,
-    ip: string,
-    userAgent: string,
-  ): Prisma.event_logCreateInput {
+  private toEventLogCreateInput(event: TrackEvent, ip: string, userAgent: string): Prisma.event_logCreateInput {
     return this.buildEventLogData(event, ip, userAgent)
   }
 
-  private toEventLogCreateManyInput(
-    event: TrackEvent,
-    ip: string,
-    userAgent: string,
-  ): Prisma.event_logCreateManyInput {
+  private toEventLogCreateManyInput(event: TrackEvent, ip: string, userAgent: string): Prisma.event_logCreateManyInput {
     return this.buildEventLogData(event, ip, userAgent)
   }
 
@@ -57,18 +49,5 @@ export class TrackRepository {
 
   private toOccurredAt(timestamp?: number): Date {
     return timestamp ? new Date(timestamp) : new Date()
-      data: {
-        project_id: event.appId,
-        event_name: event.eventName,
-        event_type: event.eventType,
-        uid: event.userId || '',
-        session_id: event.sessionId || '',
-        page_url: event.url || '',
-        event_params: event.properties || {},
-        common_params: {},
-        user_agent: userAgent || '',
-        ip: ip || '',
-      },
-    })
   }
 }
