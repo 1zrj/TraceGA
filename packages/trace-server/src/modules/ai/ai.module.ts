@@ -4,6 +4,7 @@ import { AiAnalyzeService } from './services/ai-analyze.service'
 import { DailyReportService } from './services/daily-report.service'
 import { AnomalyExplainService } from './services/anomaly-explain.service'
 import { NlQueryService } from './services/nl-query.service'
+import { RecommendService } from './services/recommend.service'
 import { GlmClientService } from './services/glm-client.service'
 import { PromptService } from './services/prompt.service'
 import { AnalysisModule } from '../analysis/analysis.module'
@@ -16,6 +17,7 @@ import { AnalysisModule } from '../analysis/analysis.module'
     DailyReportService,
     AnomalyExplainService,
     NlQueryService,
+    RecommendService,
     GlmClientService,
     PromptService,
   ],
@@ -24,6 +26,7 @@ import { AnalysisModule } from '../analysis/analysis.module'
     DailyReportService,
     AnomalyExplainService,
     NlQueryService,
+    RecommendService,
   ],
 })
 export class AiModule {}
