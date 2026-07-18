@@ -145,20 +145,40 @@ export class AnalysisRepository {
 
   async getEventTypeTrend(query: AnalyticsEventTypeTrendDto) {
     const { appId, startTime, endTime, interval = 'day' } = query
-    const dateFormat = interval === 'hour' ? '%Y-%m-%d %H:00:00' : '%Y-%m-%d'
 
-    const result = await this.prisma.$queryRaw`
-      SELECT 
-        DATE_FORMAT(created_at, ${dateFormat}) as time,
-        event_type as type,
-        COUNT(*) as count
-      FROM event_log
-      ${this.buildRawWhere(appId, startTime, endTime)}
-      GROUP BY time, event_type
-      ORDER BY time ASC, type ASC
-    `
+    const where = this.buildEventLogWhere(appId, startTime, endTime)
 
-    return result as Array<{ time: string; type: string; count: number }>
+    const logs = await this.prisma.event_log.findMany({
+      where,
+      select: { created_at: true, event_type: true },
+    })
+
+    // 在 JS 中按时间 + 事件类型分组聚合
+    const map = new Map<string, Map<string, number>>()
+
+    for (const log of logs) {
+      const d = new Date(log.created_at!)
+      const timeKey =
+        interval === 'hour'
+          ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:00:00`
+          : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const type = log.event_type ?? 'unknown'
+
+      if (!map.has(timeKey)) map.set(timeKey, new Map())
+      const typeMap = map.get(timeKey)!
+      typeMap.set(type, (typeMap.get(type) ?? 0) + 1)
+    }
+
+    const result: Array<{ time: string; type: string; count: number }> = []
+    for (const [time, typeMap] of map) {
+      for (const [type, count] of typeMap) {
+        result.push({ time, type, count })
+      }
+    }
+
+    return result.sort(
+      (a, b) => a.time.localeCompare(b.time) || a.type.localeCompare(b.type),
+    )
   }
 
   async getTopEvents(query: AnalyticsTopEventsDto) {
