@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TraceCore } from '../src';
 
 describe('TraceCore skeleton', () => {
@@ -75,5 +75,44 @@ describe('TraceCore skeleton', () => {
 
     randomSpy.mockRestore();
     logSpy.mockRestore();
+  });
+
+  describe('register fallback reporting', () => {
+    const reportUrl = 'https://collector.example.com/events';
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn().mockResolvedValue(new Response());
+      vi.stubGlobal('fetch', fetchMock);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('should report an invalid registration directly', () => {
+      const core = new TraceCore();
+
+      core.register({ appId: '', reportUrl });
+
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(fetchMock).toHaveBeenCalledWith(
+        reportUrl,
+        expect.objectContaining({
+          method: 'POST',
+          keepalive: true,
+        }),
+      );
+
+      const [, options] = fetchMock.mock.calls[0];
+      expect(JSON.parse(options.body)).toMatchObject({
+        eventType: 'sdk',
+        eventName: 'register-failed',
+        appId: '',
+        properties: {
+          message: 'TraceGA: appId is required',
+        },
+      });
+    });
   });
 });

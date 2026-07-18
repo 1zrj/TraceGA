@@ -8,14 +8,23 @@ export class TraceCore implements ITraceCore {
   private plugins: TracePlugin[] = [];
 
   register(config: TraceConfig): void {
-    this.config = {
-      ...config,
-      sampleRate: this.normalizeSampleRate(config.sampleRate),
-    };
-    this.envInfo = this.collectEnvInfo();
-    this.resetPlugins();
-    this.installBuiltinPlugins(config);
-    console.log('[TraceGA SDK] Registered with config:', config);
+    try {
+      this.validateConfig(config);
+      this.config = {
+        ...config,
+        sampleRate: this.normalizeSampleRate(config.sampleRate),
+      };
+      this.envInfo = this.collectEnvInfo();
+      this.resetPlugins();
+      this.installBuiltinPlugins(config);
+      console.log('[TraceGA SDK] Registered with config:', config);
+    } catch (error) {
+      this.resetPlugins();
+      this.config = null;
+      this.envInfo = null;
+      console.log('[TraceGA SDK] register failed');
+      this.reportRegisterFailure(config?.reportUrl, config?.appId, error);
+    }
   }
 
   trackEvent(eventType: string, eventName: string, params?: Record<string, any>): void {
@@ -84,6 +93,47 @@ export class TraceCore implements ITraceCore {
     }
 
     return Math.min(1, Math.max(0, sampleRate));
+  }
+
+  /**
+   * 注册参数校验
+   */
+  private validateConfig(config: TraceConfig): void {
+    if (!config || typeof config.appId !== 'string' || !config.appId.trim()) {
+      throw new Error('TraceGA: appId is required');
+    }
+
+    if (typeof config.reportUrl !== 'string' || !config.reportUrl.trim()) {
+      throw new Error('TraceGA: reportUrl is required');
+    }
+  }
+
+  /**
+   * sdk注册失败，上报服务器
+   */
+  private reportRegisterFailure(reportUrl: string | undefined, appId: string | undefined, error: unknown): void {
+    if (!reportUrl || typeof fetch !== 'function') {
+      return;
+    }
+
+    const payload = JSON.stringify({
+      eventType: 'sdk',
+      eventName: 'register-failed',
+      appId: appId ?? '',
+      timestamp: Date.now(),
+      url: this.getCurrentUrl(),
+      userAgent: this.getUserAgent(),
+      properties: {
+        message: error instanceof Error ? error.message : String(error),
+      },
+    });
+
+    void fetch(reportUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true,
+    }).catch(() => undefined);
   }
 
   private collectEnvInfo(): EnvInfo {
