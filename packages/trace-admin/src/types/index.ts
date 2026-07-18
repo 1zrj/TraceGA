@@ -194,6 +194,37 @@ export interface LoginDto {
   password: string
 }
 
+/** 每日 AI 日报请求参数 */
+export interface DailyReportDto {
+  appId: string
+  date?: string
+}
+
+/** 异常事件解释请求参数 */
+export interface AnomalyExplainDto {
+  appId: string
+  eventName: string
+  currentValue?: number
+  previousValue?: number
+  compareLabel?: string
+  context?: {
+    pageChange?: number
+    pageUrl?: string
+    releaseNotes?: string
+    additionalInfo?: string
+  }
+}
+
+/** GLM API 统一返回 */
+export interface AiChatResult {
+  content: string
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+}
+
 export interface LoginResult {
   token: string
   user: UserInfo
