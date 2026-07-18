@@ -3,6 +3,7 @@ import { Layout, Menu } from 'antd'
 import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAppStore } from '@/store'
+import { AiAssistantPanel } from '@/features/dashboard/components/AiAssistantPanel'
 
 const { Header, Sider, Content } = Layout
 
@@ -92,6 +93,7 @@ export const MainLayout: React.FC = () => {
           <Outlet />
         </Content>
       </Layout>
+      <AiAssistantPanel />
     </Layout>
   )
 }
