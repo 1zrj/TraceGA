@@ -1,6 +1,6 @@
 import { EventBuffer } from './EventBuffer';
-import type { TrackEventData } from '../types';
-import type { StoragePersister } from '../utils/StoragePersister';
+import type { TrackEventData } from '@/types';
+import type { StoragePersister } from '@/utils/StoragePersister';
 import type { ConcurrencyLimiter } from './ConcurrencyLimiter';
 
 export type Priority = 'urgent' | 'high' | 'normal';

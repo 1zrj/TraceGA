@@ -1,5 +1,5 @@
-import { EventType } from '../../core/types';
-import type { ITraceCore, PerformancePluginConfig, TracePlugin } from '../../types';
+import { EventType } from '@/core/types';
+import type { ITraceCore, PerformancePluginConfig, TracePlugin } from '@/types';
 import {
   PERFORMANCE_EVENT_NAME,
   PerformanceMetricName,

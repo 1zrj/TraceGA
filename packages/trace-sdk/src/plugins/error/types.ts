@@ -1,4 +1,4 @@
-import type { ITraceCore } from '../../types';
+import type { ITraceCore } from '@/types';
 
 /** 错误事件名称 */
 export enum ErrorEventName {

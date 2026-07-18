@@ -1,4 +1,4 @@
-import type { TrackEventData } from '../types';
+import type { TrackEventData } from '@/types';
 
 /** sendBeacon 单次 payload 上限（字节），超过则分片 */
 const MAX_BEACON_PAYLOAD = 60 * 1024; // 60KB

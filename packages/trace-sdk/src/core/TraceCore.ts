@@ -1,6 +1,6 @@
-import { ErrorPlugin } from '../plugins/error';
-import { PerformancePlugin } from '../plugins/performance';
-import type { TraceConfig, ITraceCore, EnvInfo, TrackEventData, TracePlugin } from '../types';
+import { ErrorPlugin } from '@/plugins/error';
+import { PerformancePlugin } from '@/plugins/performance';
+import type { TraceConfig, ITraceCore, EnvInfo, TrackEventData, TracePlugin } from '@/types';
 
 export class TraceCore implements ITraceCore {
   private config: TraceConfig | null = null;

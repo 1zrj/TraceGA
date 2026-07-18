@@ -4,12 +4,12 @@ import type {
   TrackEventData,
   EnvInfo,
   ITraceCore,
-} from '../types';
-import { PriorityScheduler } from '../core/PriorityScheduler';
-import { HttpTransporter } from '../core/HttpTransporter';
-import { LifecycleManager } from '../core/LifecycleManager';
-import { StoragePersister } from '../utils/StoragePersister';
-import { ConcurrencyLimiter } from '../core/ConcurrencyLimiter';
+} from '@/types';
+import { PriorityScheduler } from '@/core/PriorityScheduler';
+import { HttpTransporter } from '@/core/HttpTransporter';
+import { LifecycleManager } from '@/core/LifecycleManager';
+import { StoragePersister } from '@/utils/StoragePersister';
+import { ConcurrencyLimiter } from '@/core/ConcurrencyLimiter';
 
 /** 默认配置 */
 const DEFAULT_CONFIG: Partial<TraceConfig> = {

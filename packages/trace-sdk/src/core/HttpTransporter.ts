@@ -1,4 +1,4 @@
-import type { StoragePersister } from '../utils/StoragePersister';
+import type { StoragePersister } from '@/utils/StoragePersister';
 
 /**
  * 超时错误，当请求超过配置的超时时间时抛出。

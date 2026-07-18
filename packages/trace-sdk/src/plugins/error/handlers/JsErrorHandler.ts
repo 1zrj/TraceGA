@@ -1,7 +1,7 @@
-import type { ITraceCore } from '../../../types';
-import { EventType } from '../../../core/types';
-import type { ErrorHandler, ErrorPayloadBase } from '../types';
-import { ErrorEventName } from '../types';
+import type { ITraceCore } from '@/types';
+import { EventType } from '@/core/types';
+import type { ErrorHandler, ErrorPayloadBase } from '@/plugins/error/types';
+import { ErrorEventName } from '@/plugins/error/types';
 
 export interface JsErrorPayload extends ErrorPayloadBase {
   filename?: string;

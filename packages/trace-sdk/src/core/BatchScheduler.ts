@@ -1,5 +1,5 @@
 import { EventBuffer } from './EventBuffer';
-import type { TrackEventData } from '../types';
+import type { TrackEventData } from '@/types';
 import type { ConcurrencyLimiter } from './ConcurrencyLimiter';
 
 export interface BatchSchedulerConfig {

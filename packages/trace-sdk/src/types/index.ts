@@ -1,4 +1,4 @@
-export { EventType } from '../core/types';
+export { EventType } from '@/core/types';
 
 export interface TraceConfig {
   appId: string;

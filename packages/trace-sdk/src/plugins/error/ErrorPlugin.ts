@@ -1,4 +1,4 @@
-import type { ErrorPluginConfig, ITraceCore, TracePlugin } from '../../types';
+import type { ErrorPluginConfig, ITraceCore, TracePlugin } from '@/types';
 import { HttpErrorHandler } from './handlers/HttpErrorHandler';
 import { JsErrorHandler } from './handlers/JsErrorHandler';
 import { PromiseErrorHandler } from './handlers/PromiseErrorHandler';
