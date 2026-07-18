@@ -56,3 +56,52 @@ export class AnalysisFilterDto {
   @IsOptional()
   filters?: Record<string, any>[]
 }
+
+export class AnalyticsOverviewDto {
+  @IsOptional()
+  @IsString()
+  appId?: string
+
+  @IsOptional()
+  @IsString()
+  startTime?: string
+
+  @IsOptional()
+  @IsString()
+  endTime?: string
+}
+
+export class AnalyticsTrendDto {
+  @IsOptional()
+  @IsString()
+  appId?: string
+
+  @IsOptional()
+  @IsString()
+  startTime?: string
+
+  @IsOptional()
+  @IsString()
+  endTime?: string
+
+  @IsOptional()
+  @IsString()
+  interval?: 'hour' | 'day' | 'week'
+}
+
+export class AnalyticsTopEventsDto {
+  @IsOptional()
+  @IsString()
+  appId?: string
+
+  @IsOptional()
+  @IsString()
+  startTime?: string
+
+  @IsOptional()
+  @IsString()
+  endTime?: string
+
+  @IsOptional()
+  limit?: number
+}

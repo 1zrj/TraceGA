@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common'
 import { AnalysisRepository } from '../repositories/analysis.repository'
-import { AnalysisSummaryDto, AnalysisTrendDto, AnalysisFilterDto } from '../dto/analysis.dto'
+import {
+  AnalysisSummaryDto,
+  AnalysisTrendDto,
+  AnalysisFilterDto,
+  AnalyticsOverviewDto,
+  AnalyticsTrendDto,
+  AnalyticsTopEventsDto,
+} from '../dto/analysis.dto'
 
 @Injectable()
 export class AnalysisService {
@@ -16,5 +23,21 @@ export class AnalysisService {
 
   async getFiltered(query: AnalysisFilterDto) {
     return this.analysisRepository.getFiltered(query)
+  }
+
+  async getOverview(query: AnalyticsOverviewDto) {
+    return this.analysisRepository.getOverview(query)
+  }
+
+  async getEventTrend(query: AnalyticsTrendDto) {
+    return this.analysisRepository.getEventTrend(query)
+  }
+
+  async getTopEvents(query: AnalyticsTopEventsDto) {
+    return this.analysisRepository.getTopEvents(query)
+  }
+
+  async getConversionRate(query: AnalyticsOverviewDto) {
+    return this.analysisRepository.getConversionRate(query)
   }
 }
