@@ -3,6 +3,7 @@ import { AnalysisService } from '../services/analysis.service'
 import {
   AnalyticsOverviewDto,
   AnalyticsTrendDto,
+  AnalyticsEventTypeTrendDto,
   AnalyticsTopEventsDto,
 } from '../dto/analysis.dto'
 
@@ -18,6 +19,11 @@ export class AnalyticsController {
   @Get('event-trend')
   getEventTrend(@Query() query: AnalyticsTrendDto) {
     return this.analysisService.getEventTrend(query)
+  }
+
+  @Get('event-type-trend')
+  getEventTypeTrend(@Query() query: AnalyticsEventTypeTrendDto) {
+    return this.analysisService.getEventTypeTrend(query)
   }
 
   @Get('top-events')

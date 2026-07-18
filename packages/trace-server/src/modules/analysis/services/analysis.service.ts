@@ -6,6 +6,7 @@ import {
   AnalysisFilterDto,
   AnalyticsOverviewDto,
   AnalyticsTrendDto,
+  AnalyticsEventTypeTrendDto,
   AnalyticsTopEventsDto,
 } from '../dto/analysis.dto'
 
@@ -40,6 +41,10 @@ export class AnalysisService {
 
   async getEventTrend(query: AnalyticsTrendDto) {
     return this.analysisRepository.getEventTrend(query)
+  }
+
+  async getEventTypeTrend(query: AnalyticsEventTypeTrendDto) {
+    return this.analysisRepository.getEventTypeTrend(query)
   }
 
   async getTopEvents(query: AnalyticsTopEventsDto) {

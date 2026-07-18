@@ -7,6 +7,7 @@ import {
   AnalysisFilterDto,
   AnalyticsOverviewDto,
   AnalyticsTrendDto,
+  AnalyticsEventTypeTrendDto,
   AnalyticsTopEventsDto,
 } from '../dto/analysis.dto'
 
@@ -140,6 +141,24 @@ export class AnalysisRepository {
     `
 
     return result as Array<{ time: string; count: number }>
+  }
+
+  async getEventTypeTrend(query: AnalyticsEventTypeTrendDto) {
+    const { appId, startTime, endTime, interval = 'day' } = query
+    const dateFormat = interval === 'hour' ? '%Y-%m-%d %H:00:00' : '%Y-%m-%d'
+
+    const result = await this.prisma.$queryRaw`
+      SELECT 
+        DATE_FORMAT(created_at, ${dateFormat}) as time,
+        event_type as type,
+        COUNT(*) as count
+      FROM event_log
+      ${this.buildRawWhere(appId, startTime, endTime)}
+      GROUP BY time, event_type
+      ORDER BY time ASC, type ASC
+    `
+
+    return result as Array<{ time: string; type: string; count: number }>
   }
 
   async getTopEvents(query: AnalyticsTopEventsDto) {

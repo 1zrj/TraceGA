@@ -89,6 +89,24 @@ export class AnalyticsTrendDto {
   interval?: 'hour' | 'day' | 'week'
 }
 
+export class AnalyticsEventTypeTrendDto {
+  @IsOptional()
+  @IsString()
+  appId?: string
+
+  @IsOptional()
+  @IsString()
+  startTime?: string
+
+  @IsOptional()
+  @IsString()
+  endTime?: string
+
+  @IsOptional()
+  @IsString()
+  interval?: 'hour' | 'day' | 'week'
+}
+
 export class AnalyticsTopEventsDto {
   @IsOptional()
   @IsString()
