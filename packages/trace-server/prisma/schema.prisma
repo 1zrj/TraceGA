@@ -36,6 +36,7 @@ model event_log {
   project_id    String    @db.VarChar(64)
   event_name    String    @db.VarChar(128)
   event_type    String?   @db.VarChar(64)
+  occurred_at   DateTime? @db.DateTime(0)
   uid           String?   @db.VarChar(128)
   session_id    String?   @db.VarChar(128)
   page_url      String?   @db.VarChar(512)
@@ -48,6 +49,7 @@ model event_log {
   @@index([page_url], map: "idx_event_page_url")
   @@index([project_id, event_name, created_at], map: "idx_event_project_name_time")
   @@index([project_id, event_name, uid, created_at], map: "idx_event_project_name_uid_time")
+  @@index([project_id, occurred_at], map: "idx_event_project_occurred_at")
 }
 
 model project {

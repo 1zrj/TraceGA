@@ -1,0 +1,60 @@
+/* Dashboard 拖拽缩放布局样式覆盖 */
+
+/* 移除 grid item 的 width/height 过渡动画，确保首次加载时容器尺寸立即生效 */
+.react-grid-item {
+  transition-property: left, top !important;
+}
+
+/* 拖拽中禁止文字选中 */
+.react-grid-item.react-draggable-dragging,
+.react-grid-item.react-draggable-dragging *,
+.react-grid-item.resizing,
+.react-grid-item.resizing * {
+  user-select: none !important;
+}
+
+/* 占位符颜色覆盖 - 使用品牌色替代默认红色 */
+.react-grid-item.react-grid-placeholder {
+  background: #3b82f6 !important;
+  opacity: 0.15 !important;
+  border-radius: 8px;
+}
+
+/* 编辑模式下全局禁止文字选中 */
+.dashboard-edit-mode {
+  user-select: none;
+}
+
+.dashboard-edit-mode * {
+  user-select: none;
+}
+
+/* 拖拽手柄样式 */
+.drag-handle {
+  cursor: grab;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 16px;
+  color: #94a3b8;
+  user-select: none;
+  line-height: 1;
+  transition: background 0.2s;
+}
+
+.drag-handle:hover {
+  background: #f0f0f0;
+  color: #3b82f6;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* 缩放手柄在编辑模式下始终可见 */
+.dashboard-edit-mode .react-grid-item > .react-resizable-handle {
+  opacity: 0.6;
+}
+
+.dashboard-edit-mode .react-grid-item > .react-resizable-handle:hover {
+  opacity: 1;
+}

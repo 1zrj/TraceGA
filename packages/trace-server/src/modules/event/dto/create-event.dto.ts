@@ -7,9 +7,6 @@ export class CreateEventDto {
   @IsString()
   eventType: string
 
-  @IsString()
-  category: string
-
   @IsOptional()
   @IsString()
   description?: string

@@ -108,6 +108,18 @@ export interface UserInfo {
   role: string
 }
 
+export interface TopEvent {
+  name: string
+  count: number
+}
+
+/** 按事件类型分组的多日趋势数据 */
+export interface EventTypeTrendItem {
+  time: string
+  type: string
+  count: number
+}
+
 export interface FilterItem {
   key: string
   label: string

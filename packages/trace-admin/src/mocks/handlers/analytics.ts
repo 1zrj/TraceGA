@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import { mockOverview, mockEventTrend, mockTopEvents } from '../data/mockData'
+import { mockOverview, mockEventTrend, mockTopEvents, mockEventTypeTrend } from '../data/mockData'
 
 export const analyticsHandlers = [
   http.get('/api/analysis/summary', () => {
@@ -28,6 +28,13 @@ export const analyticsHandlers = [
       code: 0,
       msg: 'success',
       data: { rate: 4.5 },
+    })
+  }),
+  http.get('/api/analytics/event-type-trend', () => {
+    return HttpResponse.json({
+      code: 200,
+      message: 'success',
+      data: mockEventTypeTrend,
     })
   }),
 ]
