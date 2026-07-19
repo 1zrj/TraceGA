@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common'
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { Injectable, Logger } from '@nestjs/common';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 /**
  * PromptService
@@ -17,14 +17,14 @@ import { resolve } from 'path'
  */
 @Injectable()
 export class PromptService {
-  private readonly logger = new Logger(PromptService.name)
+  private readonly logger = new Logger(PromptService.name);
 
   /** Prompt 模板文件存放目录 */
-  private readonly promptsDir: string
+  private readonly promptsDir: string;
 
   constructor() {
     // __dirname 当前是 services/ 目录，prompts/ 在它上面一层
-    this.promptsDir = resolve(__dirname, '..', 'prompts')
+    this.promptsDir = resolve(__dirname, '..', 'prompts');
   }
 
   /**
@@ -39,7 +39,7 @@ export class PromptService {
    *   → 读取 prompts/analyze.system.txt，把 {{appName}} 替换为 "我的应用"
    */
   system(name: string, vars: Record<string, string> = {}): string {
-    return this.load(`${name}.system.txt`, vars)
+    return this.load(`${name}.system.txt`, vars);
   }
 
   /**
@@ -50,24 +50,24 @@ export class PromptService {
    * @returns     替换后的 user prompt 文本
    */
   user(name: string, vars: Record<string, string> = {}): string {
-    return this.load(`${name}.user.txt`, vars)
+    return this.load(`${name}.user.txt`, vars);
   }
 
   /**
    * 底层方法：读文件 + 替换变量
    */
   private load(fileName: string, vars: Record<string, string>): string {
-    const filePath = resolve(this.promptsDir, fileName)
+    const filePath = resolve(this.promptsDir, fileName);
 
-    let raw: string
+    let raw: string;
     try {
-      raw = readFileSync(filePath, 'utf8')
+      raw = readFileSync(filePath, 'utf8');
     } catch (err) {
-      this.logger.error(`无法读取 Prompt 文件: ${filePath}`, err)
-      throw new Error(`Prompt 文件不存在或无法读取: ${fileName}`)
+      this.logger.error(`无法读取 Prompt 文件: ${filePath}`, err);
+      throw new Error(`Prompt 文件不存在或无法读取: ${fileName}`);
     }
 
-    return this.render(raw, vars)
+    return this.render(raw, vars);
   }
 
   /**
@@ -79,7 +79,7 @@ export class PromptService {
    */
   private render(template: string, vars: Record<string, string>): string {
     return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-      return vars[key] !== undefined ? vars[key] : match
-    })
+      return vars[key] !== undefined ? vars[key] : match;
+    });
   }
 }

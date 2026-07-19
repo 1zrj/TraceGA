@@ -1,7 +1,6 @@
 // useFormValidation — 表单校验 hook
 // 支持失焦单字段校验 + 提交全量校验
 
-
 import { useState, useCallback, useRef } from 'react'
 
 // 类型定义
@@ -39,7 +38,7 @@ export type FormErrors<T extends Record<string, unknown>> = {
   [K in keyof T]?: FieldError
 }
 
-// 校验逻辑 
+// 校验逻辑
 
 /** 校验单个字段，返回 FieldError | null */
 function validateOne(
@@ -67,9 +66,7 @@ function validateOne(
   // 2. 最小长度
   if (rule.minLength !== undefined && strValue.length < rule.minLength) {
     return {
-      message:
-        rule.minLengthMessage ??
-        `最少输入 ${rule.minLength} 个字符`,
+      message: rule.minLengthMessage ?? `最少输入 ${rule.minLength} 个字符`,
       type: 'error',
     }
   }
@@ -77,9 +74,7 @@ function validateOne(
   // 3. 最大长度
   if (rule.maxLength !== undefined && strValue.length > rule.maxLength) {
     return {
-      message:
-        rule.maxLengthMessage ??
-        `最多输入 ${rule.maxLength} 个字符`,
+      message: rule.maxLengthMessage ?? `最多输入 ${rule.maxLength} 个字符`,
       type: 'error',
     }
   }
@@ -106,11 +101,9 @@ function validateOne(
   return null
 }
 
-//  Hook 
+//  Hook
 
-export function useFormValidation<T extends Record<string, unknown>>(
-  rules: ValidationRules<T>,
-) {
+export function useFormValidation<T extends Record<string, unknown>>(rules: ValidationRules<T>) {
   const [errors, setErrors] = useState<FormErrors<T>>({})
   // 追踪哪些字段已被"触摸"过（失焦过），用于控制错误展示时机
   const touchedRef = useRef<Set<string>>(new Set())
@@ -150,11 +143,7 @@ export function useFormValidation<T extends Record<string, unknown>>(
 
         touchedRef.current.add(key as string)
 
-        const error = validateOne(
-          values[key],
-          rule,
-          values as Record<string, unknown>,
-        )
+        const error = validateOne(values[key], rule, values as Record<string, unknown>)
         if (error) {
           newErrors[key as string] = error
           hasError = true

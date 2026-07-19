@@ -119,12 +119,7 @@ export class HttpTransporter {
    * @param startTime - 请求开始时间戳
    * @param eventCount - 事件数量
    */
-  private async requestWithRetry(
-    data: any,
-    attempt: number,
-    startTime: number,
-    eventCount: number,
-  ): Promise<void> {
+  private async requestWithRetry(data: any, attempt: number, startTime: number, eventCount: number): Promise<void> {
     try {
       await this.doRequest(data);
 
@@ -198,6 +193,6 @@ export class HttpTransporter {
    * @param ms - 延迟毫秒数
    */
   private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }

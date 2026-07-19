@@ -111,11 +111,7 @@ export class PriorityScheduler {
    * @returns 按 urgent → high → normal 顺序拼接的事件数组
    */
   takeAll(): TrackEventData[] {
-    return [
-      ...this.urgentBuffer.takeAll(),
-      ...this.highBuffer.takeAll(),
-      ...this.normalBuffer.takeAll(),
-    ];
+    return [...this.urgentBuffer.takeAll(), ...this.highBuffer.takeAll(), ...this.normalBuffer.takeAll()];
   }
 
   /**
@@ -209,10 +205,7 @@ export class PriorityScheduler {
    */
   private scheduleIdle(): void {
     if (typeof window !== 'undefined' && typeof (window as any).requestIdleCallback === 'function') {
-      this.idleId = (window as any).requestIdleCallback(
-        (deadline: IdleDeadline) => this.onIdle(deadline),
-        { timeout: this.idleTimeoutFallback }
-      );
+      this.idleId = (window as any).requestIdleCallback((deadline: IdleDeadline) => this.onIdle(deadline), { timeout: this.idleTimeoutFallback });
     } else {
       this.idleId = setTimeout(() => {
         this.onIdleFallback();
@@ -238,6 +231,7 @@ export class PriorityScheduler {
    * 空闲回调：仅取出 normal 队列数据上报，upper 级别不受影响。
    */
   private async onIdle(_deadline: IdleDeadline): Promise<void> {
+    void _deadline;
     await this.flushNormalOnly();
     this.scheduleIdle();
   }
@@ -281,11 +275,7 @@ export class PriorityScheduler {
   private async doFlush(): Promise<void> {
     if (this.flushing) return;
 
-    const events = [
-      ...this.urgentBuffer.takeAll(),
-      ...this.highBuffer.takeAll(),
-      ...this.normalBuffer.takeAll(),
-    ];
+    const events = [...this.urgentBuffer.takeAll(), ...this.highBuffer.takeAll(), ...this.normalBuffer.takeAll()];
 
     if (events.length === 0) return;
 

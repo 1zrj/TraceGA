@@ -14,9 +14,7 @@ interface UseRequestState<T> {
   data: T | null
 }
 
-type RequestFunction<T, P extends unknown[] = unknown[]> = (
-  ...args: P
-) => Promise<T>
+type RequestFunction<T, P extends unknown[] = unknown[]> = (...args: P) => Promise<T>
 
 interface UseRequestOptions<T, P extends unknown[]> {
   /** 是否手动触发（默认 false = 组件挂载时自动执行） */
@@ -122,10 +120,7 @@ export function useRequest<T, P extends unknown[] = unknown[]>(
   const mutate = useCallback((newData: T | ((prev: T | null) => T)) => {
     setState((prev) => ({
       ...prev,
-      data:
-        typeof newData === 'function'
-          ? (newData as (prev: T | null) => T)(prev.data)
-          : newData,
+      data: typeof newData === 'function' ? (newData as (prev: T | null) => T)(prev.data) : newData,
     }))
   }, [])
 

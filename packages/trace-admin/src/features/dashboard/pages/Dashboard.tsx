@@ -274,9 +274,7 @@ export const Dashboard: React.FC = () => {
   }
 
   // 拖拽手柄组件（仅在编辑模式下显示）
-  const dragHandle = isEditMode ? (
-    <span className="drag-handle">⋮⋮</span>
-  ) : null
+  const dragHandle = isEditMode ? <span className="drag-handle">⋮⋮</span> : null
 
   return (
     <div className={isEditMode ? 'dashboard-edit-mode' : undefined}>
@@ -289,14 +287,9 @@ export const Dashboard: React.FC = () => {
           marginBottom: 16,
         }}
       >
-        <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1e293b', margin: 0 }}>
-          数据看板
-        </h1>
+        <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1e293b', margin: 0 }}>数据看板</h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={handleResetLayout}
-          >
+          <Button icon={<ReloadOutlined />} onClick={handleResetLayout}>
             恢复默认布局
           </Button>
           <Button
@@ -350,7 +343,9 @@ export const Dashboard: React.FC = () => {
         <div key="trend" style={{ height: '100%' }}>
           <Card
             title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <span>每日总事件</span>
                 {dragHandle}
               </div>
@@ -358,7 +353,11 @@ export const Dashboard: React.FC = () => {
             styles={{ body: { height: 'calc(100% - 57px)', padding: 16 } }}
             style={{ height: '100%', overflow: 'hidden' }}
           >
-            <ReactECharts key={`trend-${chartKey}`} option={trendOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts
+              key={`trend-${chartKey}`}
+              option={trendOption}
+              style={{ height: '100%', width: '100%' }}
+            />
           </Card>
         </div>
 
@@ -366,7 +365,9 @@ export const Dashboard: React.FC = () => {
         <div key="pie" style={{ height: '100%' }}>
           <Card
             title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <span>热门事件</span>
                 {dragHandle}
               </div>
@@ -374,7 +375,11 @@ export const Dashboard: React.FC = () => {
             styles={{ body: { height: 'calc(100% - 57px)', padding: 16 } }}
             style={{ height: '100%', overflow: 'hidden' }}
           >
-            <ReactECharts key={`pie-${chartKey}`} option={topEventsOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts
+              key={`pie-${chartKey}`}
+              option={topEventsOption}
+              style={{ height: '100%', width: '100%' }}
+            />
           </Card>
         </div>
 
@@ -382,7 +387,9 @@ export const Dashboard: React.FC = () => {
         <div key="type-trend" style={{ height: '100%' }}>
           <Card
             title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <span>事件类型趋势对比</span>
                 {dragHandle}
               </div>
@@ -390,7 +397,11 @@ export const Dashboard: React.FC = () => {
             styles={{ body: { height: 'calc(100% - 57px)', padding: 16 } }}
             style={{ height: '100%', overflow: 'hidden' }}
           >
-            <ReactECharts key={`type-trend-${chartKey}`} option={typeTrendOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts
+              key={`type-trend-${chartKey}`}
+              option={typeTrendOption}
+              style={{ height: '100%', width: '100%' }}
+            />
           </Card>
         </div>
 
@@ -398,7 +409,9 @@ export const Dashboard: React.FC = () => {
         <div key="funnel" style={{ height: '100%' }}>
           <Card
             title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <span>用户行为漏斗</span>
                 {dragHandle}
               </div>
@@ -406,7 +419,11 @@ export const Dashboard: React.FC = () => {
             styles={{ body: { height: 'calc(100% - 57px)', padding: 16 } }}
             style={{ height: '100%', overflow: 'hidden' }}
           >
-            <ReactECharts key={`funnel-${chartKey}`} option={funnelOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts
+              key={`funnel-${chartKey}`}
+              option={funnelOption}
+              style={{ height: '100%', width: '100%' }}
+            />
           </Card>
         </div>
       </ResponsiveGridLayout>

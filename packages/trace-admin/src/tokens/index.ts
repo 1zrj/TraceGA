@@ -4,13 +4,7 @@
 //   B/C 端差异化变量从 variants 获取：variants.b.controlHeight / variants.c.fontSize
 
 export { colors } from './colors'
-export {
-  fontFamily,
-  fontSize,
-  fontWeight,
-  lineHeight,
-  presets,
-} from './typography'
+export { fontFamily, fontSize, fontWeight, lineHeight, presets } from './typography'
 export { scale, semantic } from './spacing'
 export { radius, bRadius, cRadius } from './radius'
 export { boxShadow } from './shadow'

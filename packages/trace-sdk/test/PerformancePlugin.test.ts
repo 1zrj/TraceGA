@@ -45,12 +45,13 @@ describe('PerformancePlugin', () => {
 
     expect(core.trackEvent).toHaveBeenCalledWith(
       'performance',
-      'performance',
       expect.objectContaining({
         metric: 'FCP',
         value: 123,
         timestamp: expect.any(Number),
       }),
+      'normal',
+      'performance',
     );
 
     plugin.uninstall();
@@ -72,11 +73,12 @@ describe('PerformancePlugin', () => {
 
     expect(core.trackEvent).toHaveBeenCalledWith(
       'performance',
-      'performance',
       expect.objectContaining({
         metric: 'LCP',
         value: 456,
       }),
+      'normal',
+      'performance',
     );
 
     plugin.uninstall();
@@ -104,11 +106,12 @@ describe('PerformancePlugin', () => {
 
     expect(core.trackEvent).toHaveBeenCalledWith(
       'performance',
-      'performance',
       expect.objectContaining({
         metric: 'CLS',
         value: 0.1,
       }),
+      'normal',
+      'performance',
     );
 
     plugin.uninstall();
@@ -136,16 +139,17 @@ describe('PerformancePlugin', () => {
 
   it('should install from TraceCore config', () => {
     const core = new TraceCore();
-    const spy = vi.spyOn(console, 'log');
+    const reporter = { report: vi.fn() };
+
+    core.setReporter(reporter);
 
     core.register({
-      appId: 'test',
+      projectId: 'test',
       reportUrl: 'http://localhost/api',
       plugins: {
         performance: true,
       },
     });
-    spy.mockClear();
 
     MockPerformanceObserver.instances[0].emit([
       {
@@ -154,18 +158,17 @@ describe('PerformancePlugin', () => {
       } as PerformanceEntry,
     ]);
 
-    expect(spy).toHaveBeenCalledWith(
-      '[TraceGA SDK] Event tracked:',
+    expect(reporter.report).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'performance',
         eventName: 'performance',
+        appId: 'test',
         properties: expect.objectContaining({
           metric: 'FCP',
           value: 123,
         }),
       }),
+      'normal',
     );
-
-    spy.mockRestore();
   });
 });

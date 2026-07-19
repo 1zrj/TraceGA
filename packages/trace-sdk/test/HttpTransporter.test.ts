@@ -13,9 +13,7 @@ describe('HttpTransporter', () => {
 
   describe('send', () => {
     it('should send data successfully on first attempt', async () => {
-      const mockFetch = vi.fn().mockResolvedValue(
-        new Response(null, { status: 200, statusText: 'OK' })
-      );
+      const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 200, statusText: 'OK' }));
       vi.stubGlobal('fetch', mockFetch);
 
       const transporter = new HttpTransporter({
@@ -32,15 +30,9 @@ describe('HttpTransporter', () => {
     it('should retry on failure and succeed on the 3rd attempt', async () => {
       const mockFetch = vi
         .fn()
-        .mockResolvedValueOnce(
-          new Response(null, { status: 500, statusText: 'Internal Server Error' })
-        )
-        .mockResolvedValueOnce(
-          new Response(null, { status: 500, statusText: 'Internal Server Error' })
-        )
-        .mockResolvedValueOnce(
-          new Response(null, { status: 200, statusText: 'OK' })
-        );
+        .mockResolvedValueOnce(new Response(null, { status: 500, statusText: 'Internal Server Error' }))
+        .mockResolvedValueOnce(new Response(null, { status: 500, statusText: 'Internal Server Error' }))
+        .mockResolvedValueOnce(new Response(null, { status: 200, statusText: 'OK' }));
       vi.stubGlobal('fetch', mockFetch);
 
       const transporter = new HttpTransporter({
@@ -61,9 +53,7 @@ describe('HttpTransporter', () => {
     });
 
     it('should reject after all retries exhausted', async () => {
-      const mockFetch = vi.fn().mockResolvedValue(
-        new Response(null, { status: 500, statusText: 'Internal Server Error' })
-      );
+      const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 500, statusText: 'Internal Server Error' }));
       vi.stubGlobal('fetch', mockFetch);
 
       const transporter = new HttpTransporter({
@@ -86,12 +76,8 @@ describe('HttpTransporter', () => {
     it('should retry on 5xx response', async () => {
       const mockFetch = vi
         .fn()
-        .mockResolvedValueOnce(
-          new Response(null, { status: 500, statusText: 'Internal Server Error' })
-        )
-        .mockResolvedValueOnce(
-          new Response(null, { status: 200, statusText: 'OK' })
-        );
+        .mockResolvedValueOnce(new Response(null, { status: 500, statusText: 'Internal Server Error' }))
+        .mockResolvedValueOnce(new Response(null, { status: 200, statusText: 'OK' }));
       vi.stubGlobal('fetch', mockFetch);
 
       const transporter = new HttpTransporter({
@@ -116,8 +102,8 @@ describe('HttpTransporter', () => {
               init?.signal?.addEventListener('abort', () => {
                 reject(new DOMException('Aborted', 'AbortError'));
               });
-            })
-        )
+            }),
+        ),
       );
 
       const transporter = new HttpTransporter({
@@ -148,9 +134,7 @@ describe('HttpTransporter', () => {
 
   describe('persister integration', () => {
     it('should cache data to localStorage after all retries exhausted', async () => {
-      const mockFetch = vi.fn().mockResolvedValue(
-        new Response(null, { status: 500, statusText: 'Internal Server Error' })
-      );
+      const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 500, statusText: 'Internal Server Error' }));
       vi.stubGlobal('fetch', mockFetch);
 
       const persister = new StoragePersister();

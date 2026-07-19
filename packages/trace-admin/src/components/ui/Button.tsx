@@ -6,13 +6,12 @@ import { Button as AntButton } from 'antd'
 import { cn, cnVar } from '@/utils/cn'
 import type { Variant } from '@/tokens'
 
-// 类型 
+// 类型
 
-export interface AppButtonProps
-  extends Omit<
-    React.ComponentProps<typeof AntButton>,
-    'variant' | 'danger' | 'size'
-  > {
+export interface AppButtonProps extends Omit<
+  React.ComponentProps<typeof AntButton>,
+  'variant' | 'danger' | 'size'
+> {
   /** 模块变体：B 端紧凑 / C 端宽松，自动决定 size 默认值 */
   variant?: Variant
   /** 危险操作（红色样式） */
@@ -21,7 +20,7 @@ export interface AppButtonProps
   size?: 'small' | 'middle' | 'large'
 }
 
-//组件 
+//组件
 
 export const Button: React.FC<AppButtonProps> = ({
   variant = 'b',

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@generated/prisma';
+import { Prisma } from '@/generated/prisma';
 import { PrismaService } from '@/database/prisma.service';
 import { TrackEvent } from '../entities/track.entity';
 

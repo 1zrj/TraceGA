@@ -1,16 +1,10 @@
-export { EventType } from '../core/types';
+export type CommonParams = Record<string, unknown>;
 
-export interface TraceConfig {
-  appId: string;
-  reportUrl: string;
-  sampleRate?: number;
-  maxBufferSize?: number;
-  flushInterval?: number;
-  plugins?: BuiltinPluginsConfig;
-  errorPlugin?: ErrorPluginConfig;
-  eventPlugin?: EventPluginConfig;
-  performancePlugin?: PerformancePluginConfig;
-}
+export type TrackEventParams = Record<string, unknown>;
+
+export type EventPriority = 'urgent' | 'high' | 'normal';
+
+export type EventType = 'custom' | 'click' | 'page_view' | 'exposure' | 'error' | 'performance' | (string & Record<never, never>);
 
 export type BuiltinPluginName = 'error' | 'event' | 'performance';
 
@@ -34,38 +28,97 @@ export interface PerformancePluginConfig {
   resource?: boolean;
 }
 
-/** 上报到服务端的事件数据结构*/
-export interface TrackEventData {
-  /** 事件类型（插件大类），如 error / event / performance */
-  eventType: string;
-  /** 事件名称（具体事件标识），如 js-error / http-error */
-  eventName: string;
-  /** 项目 ID，注册时由 appId 传入 */
-  appId: string;
-  /** 事件上报时间戳（毫秒） */
-  timestamp: number;
-  /** 事件负载数据 */
-  properties: Record<string, any>;
-  /** 事件发生时的页面 URL */
-  url?: string;
-  /** 浏览器 User-Agent */
-  userAgent?: string;
+export interface TraceConfig {
+  projectId: string;
+  reportUrl: string;
+  sampleRate?: number;
+  maxBufferSize?: number;
+  flushInterval?: number;
+  maxConcurrentRequests?: number;
+  enableAutoError?: boolean;
+  enableDebug?: boolean;
+  includeUrlQuery?: boolean;
+  includeUrlHash?: boolean;
+  plugins?: BuiltinPluginsConfig;
+  errorPlugin?: ErrorPluginConfig;
+  eventPlugin?: EventPluginConfig;
+  performancePlugin?: PerformancePluginConfig;
+  hooks?: TraceLifecycleHooks;
+}
+
+export interface ResolvedTraceConfig {
+  projectId: string;
+  reportUrl: string;
+  sampleRate: number;
+  maxBufferSize: number;
+  flushInterval: number;
+  maxConcurrentRequests: number;
+  enableAutoError: boolean;
+  enableDebug: boolean;
+  includeUrlQuery: boolean;
+  includeUrlHash: boolean;
+  plugins: Readonly<BuiltinPluginsConfig>;
+  errorPlugin: Readonly<ErrorPluginConfig>;
+  eventPlugin: Readonly<EventPluginConfig>;
+  performancePlugin: Readonly<PerformancePluginConfig>;
+  hooks: TraceLifecycleHooks;
 }
 
 export interface EnvInfo {
-  url: string;
   userAgent: string;
+  browser: string;
+  browserVersion: string;
+  os: string;
+  osVersion: string;
+  screenWidth: number;
+  screenHeight: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  referrer: string;
+  url: string;
+  uid: string;
 }
 
-export interface TracePlugin {
-  name: string;
-  install: (core: any) => void;
-  uninstall: () => void;
+export interface TrackEventData {
+  eventType: EventType;
+  eventName: string;
+  appId: string;
+  userId?: string;
+  sessionId?: string;
+  properties: TrackEventParams;
+  timestamp: number;
+  url: string;
+  referrer: string;
+}
+
+export interface TraceLifecycleHooks {
+  onReady?: (config: Readonly<ResolvedTraceConfig>) => void;
+  onBeforeTrack?: (event: TrackEventData) => TrackEventData | false | void;
+  onTrack?: (event: TrackEventData) => void;
+  onError?: (error: unknown, context?: string) => void;
+}
+
+export interface TraceReporter {
+  report(event: TrackEventData, priority: EventPriority): void | Promise<void>;
+  flush?(): void | Promise<void>;
+  destroy?(): void | Promise<void>;
 }
 
 export interface ITraceCore {
   register(config: TraceConfig): void;
-  trackEvent(eventType: string, eventName: string, params?: Record<string, any>): void;
-  getEnvInfo(): EnvInfo;
+  trackEvent(eventName: string, params?: TrackEventParams, priority?: EventPriority, eventType?: EventType): void;
+  addCommonParams(params: CommonParams): void;
+  removeCommonParams(keys: string[]): void;
+  getCommonParams(): CommonParams;
+  setUser(userId: string): void;
+  getEnvInfo(): EnvInfo | null;
+  getConfig(): Readonly<ResolvedTraceConfig> | null;
+  setReporter(reporter: TraceReporter | null): void;
+  destroy(): void;
 }
-export type { TrackEventData as IEvent };
+
+export interface TracePlugin {
+  name: string;
+  install(core: ITraceCore): void;
+  uninstall(): void;
+}

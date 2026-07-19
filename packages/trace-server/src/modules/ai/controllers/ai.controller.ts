@@ -23,19 +23,19 @@ export class AiController {
   @Post('analyze')
   @HttpCode(HttpStatus.OK)
   analyze(@Body() query: AiAnalyzeDto) {
-    return this.aiAnalyzeService.analyze(query)
+    return this.aiAnalyzeService.analyze(query);
   }
 
   @Post('daily-report')
   @HttpCode(HttpStatus.OK)
   async dailyReport(@Body() dto: DailyReportDto) {
-    return this.dailyReportService.generateDailyReport(dto.appId, dto.date)
+    return this.dailyReportService.generateDailyReport(dto.appId, dto.date);
   }
 
   @Post('anomaly-explain')
   @HttpCode(HttpStatus.OK)
   async anomalyExplain(@Body() dto: AnomalyExplainDto) {
-    return this.anomalyExplainService.explainAnomaly(dto)
+    return this.anomalyExplainService.explainAnomaly(dto);
   }
 
   @Post('nl-query')

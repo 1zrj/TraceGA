@@ -1,36 +1,32 @@
-import type { ErrorPluginConfig, ITraceCore, TracePlugin } from '../../types';
+import type { ITraceCore, TracePlugin } from '../../types';
 import { HttpErrorHandler } from './handlers/HttpErrorHandler';
 import { JsErrorHandler } from './handlers/JsErrorHandler';
 import { PromiseErrorHandler } from './handlers/PromiseErrorHandler';
 import { ResourceErrorHandler } from './handlers/ResourceErrorHandler';
-import type { ErrorHandler } from './types';
-
-const ERROR_HANDLER_FACTORIES: Array<{
-  key: keyof ErrorPluginConfig;
-  create: (reportUrl?: string) => ErrorHandler;
-}> = [
-  { key: 'js', create: () => new JsErrorHandler() },
-  { key: 'promise', create: () => new PromiseErrorHandler() },
-  { key: 'resource', create: () => new ResourceErrorHandler() },
-  { key: 'http', create: reportUrl => new HttpErrorHandler(reportUrl) },
-];
+import type { ErrorHandler, ErrorPluginOptions } from './types';
 
 export class ErrorPlugin implements TracePlugin {
   name = 'ErrorPlugin';
 
   private installed = false;
+  private activeHandlers: ErrorHandler[] = [];
   private readonly handlers: ErrorHandler[];
 
-  constructor(config: ErrorPluginConfig = {}, reportUrl?: string) {
-    const mergedConfig: Required<ErrorPluginConfig> = {
+  constructor(private readonly options: ErrorPluginOptions = {}) {
+    const enabled = {
       js: true,
       promise: true,
       resource: true,
       http: true,
-      ...config,
+      ...options,
     };
 
-    this.handlers = ERROR_HANDLER_FACTORIES.filter(({ key }) => mergedConfig[key]).map(({ create }) => create(reportUrl));
+    const handlers: ErrorHandler[] = [];
+    if (enabled.js) handlers.push(new JsErrorHandler());
+    if (enabled.promise) handlers.push(new PromiseErrorHandler());
+    if (enabled.resource) handlers.push(new ResourceErrorHandler());
+    if (enabled.http) handlers.push(new HttpErrorHandler(options.reportUrl));
+    this.handlers = handlers;
   }
 
   install(core: ITraceCore): void {
@@ -38,7 +34,19 @@ export class ErrorPlugin implements TracePlugin {
       return;
     }
 
-    this.handlers.forEach(handler => handler.install(core));
+    if (!core || typeof core.trackEvent !== 'function') {
+      this.reportError(new TypeError('ErrorPlugin requires a valid TraceCore'), 'error.install.core');
+      return;
+    }
+
+    this.handlers.forEach(handler => {
+      try {
+        handler.install(core);
+        this.activeHandlers.push(handler);
+      } catch (error) {
+        this.reportError(error, 'error.install.handler');
+      }
+    });
     this.installed = true;
   }
 
@@ -47,7 +55,24 @@ export class ErrorPlugin implements TracePlugin {
       return;
     }
 
-    this.handlers.forEach(handler => handler.uninstall());
+    const handlers = [...this.activeHandlers].reverse();
+    this.activeHandlers = [];
     this.installed = false;
+
+    handlers.forEach(handler => {
+      try {
+        handler.uninstall();
+      } catch (error) {
+        this.reportError(error, 'error.uninstall.handler');
+      }
+    });
+  }
+
+  private reportError(error: unknown, context: string): void {
+    try {
+      this.options.onError?.(error, context);
+    } catch {
+      // User callbacks must never escape the plugin boundary.
+    }
   }
 }

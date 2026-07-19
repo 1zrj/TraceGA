@@ -6,9 +6,10 @@
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
     "prepare": "husky",
-    "lint": "eslint \"packages/**/*.{js,mjs,cjs}\" --no-error-on-unmatched-pattern",
-    "lint:fix": "eslint \"packages/**/*.{js,mjs,cjs}\" --fix --no-error-on-unmatched-pattern",
-    "format": "prettier --write packages/"
+    "lint": "pnpm -r --if-present lint",
+    "lint:fix": "pnpm -r --if-present lint:fix",
+    "format": "prettier --write packages/",
+    "format:check": "pnpm --filter @tracega/sdk format:check"
   },
   "author": "",
   "license": "ISC",

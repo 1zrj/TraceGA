@@ -1,12 +1,5 @@
-import { EventType } from '../../core/types';
 import type { ITraceCore, PerformancePluginConfig, TracePlugin } from '../../types';
-import {
-  PERFORMANCE_EVENT_NAME,
-  PerformanceMetricName,
-  type LargestContentfulPaintEntry,
-  type LayoutShiftEntry,
-  type PerformanceMetricPayload,
-} from './types';
+import { PERFORMANCE_EVENT_NAME, PerformanceMetricName, type LargestContentfulPaintEntry, type LayoutShiftEntry, type PerformanceMetricPayload } from './types';
 
 export class PerformancePlugin implements TracePlugin {
   name = 'PerformancePlugin';
@@ -176,7 +169,7 @@ export class PerformancePlugin implements TracePlugin {
       timestamp: Date.now(),
     };
 
-    this.core.trackEvent(EventType.Performance, PERFORMANCE_EVENT_NAME, payload);
+    this.core.trackEvent(PERFORMANCE_EVENT_NAME, payload, 'normal', 'performance');
   }
 
   private canUsePerformanceObserver(): boolean {

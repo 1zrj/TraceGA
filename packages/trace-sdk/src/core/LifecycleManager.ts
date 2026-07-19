@@ -82,19 +82,14 @@ export class LifecycleManager {
    * 若 sendBeacon 不可用，降级为 fetch + keepalive。
    */
   private sendWithBeacon(events: TrackEventData[]): void {
-    const isBeaconAvailable =
-      typeof navigator !== 'undefined' &&
-      typeof navigator.sendBeacon === 'function';
+    const isBeaconAvailable = typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function';
 
     const json = JSON.stringify(events);
 
     // 单次 payload 不超过 60KB，直接发送
     if (json.length <= MAX_BEACON_PAYLOAD) {
       if (isBeaconAvailable) {
-        navigator.sendBeacon(
-          this.reportUrl,
-          new Blob([json], { type: 'application/json' }),
-        );
+        navigator.sendBeacon(this.reportUrl, new Blob([json], { type: 'application/json' }));
       } else {
         this.sendKeepalive(json);
       }
@@ -106,10 +101,7 @@ export class LifecycleManager {
     for (const chunk of chunks) {
       const chunkJson = JSON.stringify(chunk);
       if (isBeaconAvailable) {
-        navigator.sendBeacon(
-          this.reportUrl,
-          new Blob([chunkJson], { type: 'application/json' }),
-        );
+        navigator.sendBeacon(this.reportUrl, new Blob([chunkJson], { type: 'application/json' }));
       } else {
         this.sendKeepalive(chunkJson);
       }

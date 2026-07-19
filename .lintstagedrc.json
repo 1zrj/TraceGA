@@ -1,4 +1,6 @@
 {
-  "*.{js,mjs,cjs}": ["eslint --fix", "prettier --write"],
-  "*.{ts,tsx,json,md}": ["prettier --write"]
+  "packages/trace-sdk/**/*.{ts,js,mjs,cjs}": ["pnpm --dir packages/trace-sdk exec eslint --fix", "prettier --write"],
+  "packages/trace-admin/**/*.{ts,tsx,js}": ["pnpm --dir packages/trace-admin exec eslint --fix", "prettier --write"],
+  "packages/trace-server/**/*.ts": ["pnpm --dir packages/trace-server exec eslint --fix", "prettier --write"],
+  "*.{json,md,yml,yaml}": "prettier --write"
 }

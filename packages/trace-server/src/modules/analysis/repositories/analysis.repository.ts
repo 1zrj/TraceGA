@@ -1,16 +1,16 @@
-import { Injectable } from '@nestjs/common'
-import { Prisma } from '@generated/prisma'
-import { PrismaService } from '../../../database/prisma.service'
-import { AnalysisSummaryDto, AnalysisTrendDto, AnalysisFilterDto } from '../dto/analysis.dto'
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@generated/prisma';
+import { PrismaService } from '../../../database/prisma.service';
+import { AnalysisSummaryDto, AnalysisTrendDto, AnalysisFilterDto } from '../dto/analysis.dto';
 
 @Injectable()
 export class AnalysisRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSummary(query: AnalysisSummaryDto) {
-    const { appId, startTime, endTime } = query
+    const { appId, startTime, endTime } = query;
 
-    const where: Prisma.event_logWhereInput = this.buildEventLogWhere(appId, startTime, endTime)
+    const where: Prisma.event_logWhereInput = this.buildEventLogWhere(appId, startTime, endTime);
 
     const [pvResult, uvSubquery, eventNames] = await this.prisma.$transaction([
       this.prisma.event_log.count({ where }),
@@ -24,22 +24,22 @@ export class AnalysisRepository {
         select: { event_name: true },
         distinct: ['event_name'],
       }),
-    ])
+    ]);
 
-    const uv = uvSubquery.length
-    const eventCount = eventNames.length
+    const uv = uvSubquery.length;
+    const eventCount = eventNames.length;
 
     return {
       pv: pvResult,
       uv,
       eventCount,
-    }
+    };
   }
 
   async getTrend(query: AnalysisTrendDto) {
-    const { appId, eventType, startTime, endTime, interval = 'day' } = query
+    const { appId, eventType, startTime, endTime, interval = 'day' } = query;
 
-    const dateFormat = interval === 'hour' ? '%Y-%m-%d %H:00:00' : '%Y-%m-%d'
+    const dateFormat = interval === 'hour' ? '%Y-%m-%d %H:00:00' : '%Y-%m-%d';
 
     const result = await this.prisma.$queryRaw`
       SELECT 
@@ -50,13 +50,13 @@ export class AnalysisRepository {
       ${this.buildRawWhere(appId, startTime, endTime, eventType)}
       GROUP BY date
       ORDER BY date ASC
-    `
+    `;
 
-    return result as Array<{ date: string; pv: number; uv: number }>
+    return result as Array<{ date: string; pv: number; uv: number }>;
   }
 
   async getFiltered(query: AnalysisFilterDto) {
-    const { appId, eventTypes, startTime, endTime } = query
+    const { appId, eventTypes, startTime, endTime } = query;
 
     const result = await this.prisma.$queryRaw`
       SELECT 
@@ -69,60 +69,51 @@ export class AnalysisRepository {
       GROUP BY event_name, event_type
       ORDER BY count DESC
       LIMIT 100
-    `
+    `;
 
-    return result as Array<{ event_name: string; event_type: string; count: number }>
+    return result as Array<{ event_name: string; event_type: string; count: number }>;
   }
 
-  private buildEventLogWhere(
-    appId?: string,
-    startTime?: string,
-    endTime?: string,
-  ): Prisma.event_logWhereInput {
-    const where: Prisma.event_logWhereInput = {}
+  private buildEventLogWhere(appId?: string, startTime?: string, endTime?: string): Prisma.event_logWhereInput {
+    const where: Prisma.event_logWhereInput = {};
 
     if (appId) {
-      where.project_id = appId
+      where.project_id = appId;
     }
 
-    const dateFilter: Prisma.DateTimeFilter = {}
+    const dateFilter: Prisma.DateTimeFilter = {};
     if (startTime) {
-      dateFilter.gte = new Date(startTime)
+      dateFilter.gte = new Date(startTime);
     }
     if (endTime) {
-      dateFilter.lte = new Date(endTime)
+      dateFilter.lte = new Date(endTime);
     }
     if (Object.keys(dateFilter).length > 0) {
-      where.created_at = dateFilter
+      where.created_at = dateFilter;
     }
 
-    return where
+    return where;
   }
 
-  private buildRawWhere(
-    appId?: string,
-    startTime?: string,
-    endTime?: string,
-    eventType?: string,
-  ) {
-    const conditions: string[] = []
+  private buildRawWhere(appId?: string, startTime?: string, endTime?: string, eventType?: string) {
+    const conditions: string[] = [];
 
     if (appId) {
-      conditions.push(`project_id = '${appId}'`)
+      conditions.push(`project_id = '${appId}'`);
     }
 
     if (startTime) {
-      conditions.push(`created_at >= '${startTime}'`)
+      conditions.push(`created_at >= '${startTime}'`);
     }
 
     if (endTime) {
-      conditions.push(`created_at <= '${endTime}'`)
+      conditions.push(`created_at <= '${endTime}'`);
     }
 
     if (eventType) {
-      conditions.push(`event_type = '${eventType}'`)
+      conditions.push(`event_type = '${eventType}'`);
     }
 
-    return conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    return conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   }
 }

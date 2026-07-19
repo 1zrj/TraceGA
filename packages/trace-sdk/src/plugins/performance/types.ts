@@ -6,7 +6,7 @@ export enum PerformanceMetricName {
   CLS = 'CLS',
 }
 
-export interface PerformanceMetricPayload {
+export interface PerformanceMetricPayload extends Record<string, unknown> {
   metric: PerformanceMetricName;
   value: number;
   timestamp: number;

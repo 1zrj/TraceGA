@@ -113,36 +113,22 @@ instance.interceptors.response.use(
 
 // ─── 请求方法 ──────────────────────────────────────────────────
 
-async function get<T>(
-  url: string,
-  config?: AxiosRequestConfig,
-): Promise<T> {
+async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const response = await instance.get<ApiResponse<T>>(url, config)
   return response.data.data
 }
 
-async function post<T>(
-  url: string,
-  data?: unknown,
-  config?: AxiosRequestConfig,
-): Promise<T> {
+async function post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
   const response = await instance.post<ApiResponse<T>>(url, data, config)
   return response.data.data
 }
 
-async function put<T>(
-  url: string,
-  data?: unknown,
-  config?: AxiosRequestConfig,
-): Promise<T> {
+async function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
   const response = await instance.put<ApiResponse<T>>(url, data, config)
   return response.data.data
 }
 
-async function del<T>(
-  url: string,
-  config?: AxiosRequestConfig,
-): Promise<T> {
+async function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const response = await instance.delete<ApiResponse<T>>(url, config)
   return response.data.data
 }

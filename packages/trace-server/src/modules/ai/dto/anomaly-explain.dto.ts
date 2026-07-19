@@ -1,45 +1,45 @@
-import { IsString, IsNumber, IsOptional, ValidateNested } from 'class-validator'
-import { Type } from 'class-transformer'
+import { IsString, IsNumber, IsOptional, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 class AnomalyContext {
   @IsOptional()
   @IsNumber()
-  pageChange?: number
+  pageChange?: number;
 
   @IsOptional()
   @IsString()
-  pageUrl?: string
+  pageUrl?: string;
 
   @IsOptional()
   @IsString()
-  releaseNotes?: string
+  releaseNotes?: string;
 
   @IsOptional()
   @IsString()
-  additionalInfo?: string
+  additionalInfo?: string;
 }
 
 export class AnomalyExplainDto {
   @IsString()
-  appId: string
+  appId: string;
 
   @IsString()
-  eventName: string
+  eventName: string;
 
   @IsOptional()
   @IsNumber()
-  currentValue?: number
+  currentValue?: number;
 
   @IsOptional()
   @IsNumber()
-  previousValue?: number
+  previousValue?: number;
 
   @IsOptional()
   @IsString()
-  compareLabel?: string
+  compareLabel?: string;
 
   @IsOptional()
   @ValidateNested()
   @Type(() => AnomalyContext)
-  context?: AnomalyContext
+  context?: AnomalyContext;
 }
