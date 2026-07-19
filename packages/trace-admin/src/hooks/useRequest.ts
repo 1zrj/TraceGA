@@ -56,6 +56,8 @@ export function useRequest<T, P extends unknown[] = unknown[]>(
 
   // 用于取消未完成请求
   const abortRef = useRef<AbortController | null>(null)
+  // fetchId 计数器 — 防止竞态：旧请求的结果不覆盖新请求
+  const fetchIdRef = useRef(0)
   // 追踪组件是否已卸载
   const mountedRef = useRef(true)
 
@@ -74,21 +76,24 @@ export function useRequest<T, P extends unknown[] = unknown[]>(
       const controller = new AbortController()
       abortRef.current = controller
 
+      const fetchId = ++fetchIdRef.current
       setState((prev) => ({ ...prev, loading: true, error: null }))
 
       try {
         const data = await requestFn(...args)
+        // 防止竞态：旧请求的结果忽略
+        if (fetchId !== fetchIdRef.current) return undefined
         if (!mountedRef.current) return undefined
 
         setState({ loading: false, error: null, data })
         onSuccess?.(data, args)
         return data
       } catch (err) {
-        // 如果是被取消的请求，忽略
+        // 如果是被取消的请求或被竞态覆盖的请求，忽略
         if (err instanceof DOMException && err.name === 'AbortError') {
           return undefined
         }
-
+        if (fetchId !== fetchIdRef.current) return undefined
         if (!mountedRef.current) return undefined
 
         const error = err instanceof Error ? err : new Error(String(err))

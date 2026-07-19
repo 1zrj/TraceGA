@@ -1,9 +1,8 @@
-// ═══════════════════════════════════════════════════════════════
 // ConfirmButton — 带确认弹窗的按钮
 // 点击自动弹出 Modal.confirm，确认后执行 onConfirm（支持 async）
-// ═══════════════════════════════════════════════════════════════
+// antd v5 Modal.confirm 的 onOk 返回 Promise 会自动管理按钮 loading
 
-import React, { useState, useCallback } from 'react'
+import React, { useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import type { AppButtonProps } from '@/components/ui/Button'
@@ -19,7 +18,7 @@ export interface ConfirmButtonProps extends Omit<AppButtonProps, 'onClick'> {
   okText?: string
   /** 取消按钮文案 */
   cancelText?: string
-  /** 确认回调，支持 async（自动管理 loading） */
+  /** 确认回调，支持 async（antd 自动管理 loading，无需手动 setState） */
   onConfirm?: () => void | Promise<void>
   /** 是否为危险操作（okButton 红色） */
   danger?: boolean
@@ -40,9 +39,13 @@ export const ConfirmButton: React.FC<ConfirmButtonProps> = ({
   children,
   ...buttonProps
 }) => {
-  const [confirmLoading, setConfirmLoading] = useState(false)
+  const modalOpenRef = useRef(false)
 
   const handleClick = useCallback(() => {
+    // 防止连点打开多个 Modal
+    if (modalOpenRef.current) return
+    modalOpenRef.current = true
+
     onClick?.()
 
     Modal.confirm({
@@ -50,30 +53,22 @@ export const ConfirmButton: React.FC<ConfirmButtonProps> = ({
       content: confirmContent,
       okText,
       cancelText,
-      okButtonProps: {
-        danger,
-        loading: confirmLoading,
-      },
+      okButtonProps: { danger },
+      // antd v5: onOk 返回 Promise 时自动在确认按钮上显示 loading
       onOk: async () => {
-        if (!onConfirm) return
-        setConfirmLoading(true)
         try {
-          await onConfirm()
+          if (onConfirm) {
+            await onConfirm()
+          }
         } finally {
-          setConfirmLoading(false)
+          modalOpenRef.current = false
         }
       },
+      onCancel: () => {
+        modalOpenRef.current = false
+      },
     })
-  }, [
-    confirmTitle,
-    confirmContent,
-    okText,
-    cancelText,
-    danger,
-    confirmLoading,
-    onConfirm,
-    onClick,
-  ])
+  }, [confirmTitle, confirmContent, okText, cancelText, danger, onConfirm, onClick])
 
   return (
     <Button danger={danger} onClick={handleClick} {...buttonProps}>
