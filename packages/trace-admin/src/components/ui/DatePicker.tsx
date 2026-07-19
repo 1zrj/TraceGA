@@ -23,7 +23,7 @@ export function getSharedPresets(): {
   ]
 }
 
-/** 默认预设引用，供 RangePicker 使用 */
+/** 静态预设引用（import time 固定）。推荐在组件中使用 getSharedPresets() 以获取实时日期。 */
 export const SHARED_PRESETS = getSharedPresets()
 
 // 类型 
@@ -71,15 +71,16 @@ export const DatePicker: React.FC<AppDatePickerProps> = ({
 export const RangePicker: React.FC<AppRangePickerProps> = ({
   variant = 'b',
   format = 'YYYY-MM-DD',
-  presets = SHARED_PRESETS,
+  presets,
   placeholder,
   className,
   ...rest
 }) => {
+  const resolvedPresets = presets ?? getSharedPresets()
   return (
     <AntDatePicker.RangePicker
       format={format}
-      presets={presets}
+      presets={resolvedPresets}
       placeholder={placeholder ?? ['开始日期', '结束日期']}
       className={cn('datepicker', cnVar(variant), className)}
       {...rest}

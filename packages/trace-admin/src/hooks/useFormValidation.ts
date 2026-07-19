@@ -173,8 +173,9 @@ export function useFormValidation<T extends Record<string, unknown>>(
     touchedRef.current.clear()
   }, [])
 
-  /** 清除指定字段的错误 */
+  /** 清除指定字段的错误和触摸状态 */
   const clearFieldError = useCallback((field: keyof T) => {
+    touchedRef.current.delete(field as string)
     setErrors((prev) => {
       const next = { ...prev }
       delete (next as Record<string, FieldError | undefined>)[field as string]

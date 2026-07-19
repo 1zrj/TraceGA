@@ -17,3 +17,11 @@ export type { AppModalProps } from './Modal'
 
 export { Drawer } from './Drawer'
 export type { AppDrawerProps } from './Drawer'
+
+export { AppTable } from './AppTable'
+export type {
+  AppTableColumn,
+  AppTableProps,
+  AppTableRequestParams,
+  AppTableRequestResult,
+} from './AppTable'
