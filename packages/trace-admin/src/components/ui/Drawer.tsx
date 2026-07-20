@@ -6,17 +6,16 @@ import { Drawer as AntDrawer } from 'antd'
 import { cn, cnVar } from '@/utils/cn'
 import type { Variant } from '@/tokens'
 
-//  类型 
+//  类型
 
-export interface AppDrawerProps
-  extends Omit<
-    React.ComponentProps<typeof AntDrawer>,
-    'variant' | 'maskClosable' | 'destroyOnClose'
-  > {
+export interface AppDrawerProps extends Omit<
+  React.ComponentProps<typeof AntDrawer>,
+  'variant' | 'maskClosable' | 'destroyOnClose'
+> {
   variant?: Variant
 }
 
-//  组件 
+//  组件
 
 export const Drawer: React.FC<AppDrawerProps> = ({
   variant = 'b',

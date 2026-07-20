@@ -1,4 +1,3 @@
-
 // Design Token — B / C 端差异化变量
 
 export type Variant = 'b' | 'c'

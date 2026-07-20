@@ -1,10 +1,4 @@
-import type {
-  TraceConfig,
-  CommonParams,
-  TrackEventData,
-  EnvInfo,
-  ITraceCore,
-} from '../types';
+import type { TraceConfig, CommonParams, TrackEventData, EnvInfo } from '../types';
 import { PriorityScheduler } from '../core/PriorityScheduler';
 import { HttpTransporter } from '../core/HttpTransporter';
 import { LifecycleManager } from '../core/LifecycleManager';
@@ -35,7 +29,7 @@ type EventCallback = (meta: any) => void;
  *   └── ConcurrencyLimiter — 并发控制
  * ```
  */
-export class Reporter implements ITraceCore {
+export class Reporter {
   private config!: TraceConfig;
   private scheduler!: PriorityScheduler;
   private transporter!: HttpTransporter;
@@ -80,9 +74,9 @@ export class Reporter implements ITraceCore {
     });
 
     // 将 transporter 的事件钩子转发为 Reporter 事件
-    this.transporter.on('success', (meta) => this.emit('success', meta));
-    this.transporter.on('failed', (meta) => this.emit('failed', meta));
-    this.transporter.on('retry', (meta) => this.emit('retry', meta));
+    this.transporter.on('success', meta => this.emit('success', meta));
+    this.transporter.on('failed', meta => this.emit('failed', meta));
+    this.transporter.on('retry', meta => this.emit('retry', meta));
 
     this.scheduler = new PriorityScheduler({
       maxBufferSize: this.config.maxBufferSize!,
@@ -152,17 +146,22 @@ export class Reporter implements ITraceCore {
     if (!this.registered) return;
 
     // 采样过滤
-    if (
-      this.config.sampleRate !== undefined &&
-      this.config.sampleRate < 1 &&
-      Math.random() > this.config.sampleRate
-    ) {
+    if (this.config.sampleRate !== undefined && this.config.sampleRate < 1 && Math.random() > this.config.sampleRate) {
       return;
     }
 
-    const event: TrackEventData = {
+    const event: TrackEventData & {
+      customParams: Record<string, any>;
+      commonParams: CommonParams;
+      envInfo: EnvInfo;
+    } = {
+      eventType: 'custom',
       eventName,
+      appId: this.config.projectId,
+      properties: { ...this.commonParams, ...(params ?? {}) },
       timestamp: Date.now(),
+      url: this.envInfo.url,
+      referrer: this.envInfo.referrer,
       customParams: params ?? {},
       commonParams: { ...this.commonParams },
       envInfo: this.envInfo,
@@ -222,17 +221,22 @@ export class Reporter implements ITraceCore {
    */
   private collectEnvInfo(): EnvInfo {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const screenWidth = typeof screen !== 'undefined' ? screen.width : 0;
+    const screenHeight = typeof screen !== 'undefined' ? screen.height : 0;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
     return {
       browser: this.detectBrowser(ua),
+      browserVersion: '',
       os: this.detectOS(ua),
-      screen: typeof screen !== 'undefined'
-        ? `${screen.width}x${screen.height}`
-        : '',
-      viewport: typeof window !== 'undefined'
-        ? `${window.innerWidth}x${window.innerHeight}`
-        : '',
+      osVersion: '',
+      screenWidth,
+      screenHeight,
+      viewportWidth,
+      viewportHeight,
       uid: '',
       url: typeof location !== 'undefined' ? location.href : '',
+      referrer: typeof document !== 'undefined' ? document.referrer : '',
       userAgent: ua,
     };
   }

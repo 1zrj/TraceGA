@@ -6,16 +6,18 @@ import { Input as AntInput } from 'antd'
 import { cn, cnVar } from '@/utils/cn'
 import type { Variant } from '@/tokens'
 
-//类型 
+//类型
 
 type AntInputType = typeof AntInput
 
-export interface AppInputProps
-  extends Omit<React.ComponentProps<AntInputType>, 'variant' | 'allowClear'> {
+export interface AppInputProps extends Omit<
+  React.ComponentProps<AntInputType>,
+  'variant' | 'allowClear'
+> {
   variant?: Variant
 }
 
-// Input 
+// Input
 
 function InputFn({
   variant = 'b',
@@ -34,7 +36,7 @@ function InputFn({
   )
 }
 
-// TextArea 
+// TextArea
 
 type TextAreaType = typeof AntInput.TextArea
 
@@ -61,7 +63,7 @@ function TextAreaFn({
   )
 }
 
-//  Search 
+//  Search
 type SearchType = typeof AntInput.Search
 
 function SearchFn({
@@ -83,7 +85,7 @@ function SearchFn({
   )
 }
 
-//  Password 
+//  Password
 
 type PasswordType = typeof AntInput.Password
 

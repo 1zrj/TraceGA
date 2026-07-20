@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { ConcurrencyLimiter } from '../src/core/ConcurrencyLimiter';
 
 describe('ConcurrencyLimiter', () => {
@@ -42,9 +42,15 @@ describe('ConcurrencyLimiter', () => {
 
       await limiter.acquire();
 
-      const p1 = limiter.acquire().then(() => { order.push(1); });
-      const p2 = limiter.acquire().then(() => { order.push(2); });
-      const p3 = limiter.acquire().then(() => { order.push(3); });
+      const p1 = limiter.acquire().then(() => {
+        order.push(1);
+      });
+      const p2 = limiter.acquire().then(() => {
+        order.push(2);
+      });
+      const p3 = limiter.acquire().then(() => {
+        order.push(3);
+      });
 
       expect(limiter.getWaitingCount()).toBe(3);
 
@@ -75,7 +81,7 @@ describe('ConcurrencyLimiter', () => {
       async function task(name: string, delay: number): Promise<void> {
         await limiter.acquire();
         results.push(`start-${name}`);
-        await new Promise((r) => setTimeout(r, delay));
+        await new Promise(r => setTimeout(r, delay));
         results.push(`end-${name}`);
         limiter.release();
       }
@@ -84,19 +90,19 @@ describe('ConcurrencyLimiter', () => {
       task('B', 10);
       task('C', 10);
 
-      await new Promise((r) => setTimeout(r, 0));
+      await new Promise(r => setTimeout(r, 0));
       // A 和 B 应该同时开始（并发数 = 2），C 排队
       expect(results).toContain('start-A');
       expect(results).toContain('start-B');
       expect(results).not.toContain('start-C');
 
-      await new Promise((r) => setTimeout(r, 20));
+      await new Promise(r => setTimeout(r, 20));
       // A 和 B 完成后，C 开始
       expect(results).toContain('end-A');
       expect(results).toContain('end-B');
       expect(results).toContain('start-C');
 
-      await new Promise((r) => setTimeout(r, 20));
+      await new Promise(r => setTimeout(r, 20));
       expect(results).toContain('end-C');
     });
   });

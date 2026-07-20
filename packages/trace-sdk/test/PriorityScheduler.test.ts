@@ -221,9 +221,7 @@ describe('PriorityScheduler', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(onFlush).toHaveBeenCalledTimes(1);
-      expect(onFlush).toHaveBeenCalledWith([
-        expect.objectContaining({ eventName: 'n1' }),
-      ]);
+      expect(onFlush).toHaveBeenCalledWith([expect.objectContaining({ eventName: 'n1' })]);
 
       // 再次空闲回调，normal 已空，不应触发 onFlush
       onFlush.mockClear();
@@ -289,7 +287,7 @@ describe('PriorityScheduler', () => {
       vi.stubGlobal('requestIdleCallback', () => 1);
       vi.stubGlobal('cancelIdleCallback', vi.fn());
 
-      const scheduler = new PriorityScheduler({
+      new PriorityScheduler({
         maxBufferSize: 10,
         flushInterval: 5000,
         onFlush,
@@ -319,7 +317,7 @@ describe('PriorityScheduler', () => {
       vi.stubGlobal('requestIdleCallback', () => 1);
       vi.stubGlobal('cancelIdleCallback', vi.fn());
 
-      const scheduler = new PriorityScheduler({
+      new PriorityScheduler({
         maxBufferSize: 10,
         flushInterval: 5000,
         onFlush,

@@ -6,17 +6,16 @@ import { Select as AntSelect } from 'antd'
 import { cn, cnVar } from '@/utils/cn'
 import type { Variant } from '@/tokens'
 
-// 类型 
+// 类型
 
-export interface AppSelectProps
-  extends Omit<
-    React.ComponentProps<typeof AntSelect>,
-    'variant' | 'showSearch' | 'allowClear'
-  > {
+export interface AppSelectProps extends Omit<
+  React.ComponentProps<typeof AntSelect>,
+  'variant' | 'showSearch' | 'allowClear'
+> {
   variant?: Variant
 }
 
-//  组件 
+//  组件
 
 export const Select: React.FC<AppSelectProps> = ({
   variant = 'b',

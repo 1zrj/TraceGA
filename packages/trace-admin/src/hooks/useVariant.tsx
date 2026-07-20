@@ -1,7 +1,6 @@
 // useVariant — 读取全局 B/C variant 配置
 // 组件树任意位置调用，默认返回 'b'
 
-
 import { createContext, useContext, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import type { Variant } from '@/tokens'
@@ -16,7 +15,7 @@ const VariantContext = createContext<VariantContextValue>({
   variant: 'b',
 })
 
-// Provider 
+// Provider
 
 interface VariantProviderProps {
   variant: Variant
@@ -26,12 +25,10 @@ interface VariantProviderProps {
 /** 在组件树顶层包裹，注入当前 variant */
 export function VariantProvider({ variant, children }: VariantProviderProps) {
   const value = useMemo(() => ({ variant }), [variant])
-  return (
-    <VariantContext.Provider value={value}>{children}</VariantContext.Provider>
-  )
+  return <VariantContext.Provider value={value}>{children}</VariantContext.Provider>
 }
 
-// Hooks 
+// Hooks
 
 /** 获取当前 variant — 'b' | 'c'，默认 'b' */
 export function useVariant(): Variant {

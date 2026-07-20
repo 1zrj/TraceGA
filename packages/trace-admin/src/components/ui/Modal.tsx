@@ -6,17 +6,16 @@ import { Modal as AntModal } from 'antd'
 import { cn, cnVar } from '@/utils/cn'
 import type { Variant } from '@/tokens'
 
-//  类型 
+//  类型
 
-export interface AppModalProps
-  extends Omit<
-    React.ComponentProps<typeof AntModal>,
-    'variant' | 'maskClosable' | 'destroyOnClose'
-  > {
+export interface AppModalProps extends Omit<
+  React.ComponentProps<typeof AntModal>,
+  'variant' | 'maskClosable' | 'destroyOnClose'
+> {
   variant?: Variant
 }
 
-// Modal 组件 
+// Modal 组件
 
 function ModalFn({
   variant = 'b',

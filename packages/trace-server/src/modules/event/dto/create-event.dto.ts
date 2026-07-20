@@ -1,20 +1,20 @@
-import { IsString, IsOptional, IsObject } from 'class-validator'
+import { IsString, IsOptional, IsObject } from 'class-validator';
 
 export class CreateEventDto {
   @IsString()
-  eventName: string
+  eventName: string;
 
   @IsString()
-  eventType: string
+  eventType: string;
 
   @IsOptional()
   @IsString()
-  description?: string
+  description?: string;
 
   @IsOptional()
   @IsObject()
-  propertySchema?: Record<string, any>
+  propertySchema?: Record<string, any>;
 
   @IsString()
-  appId: string
+  appId: string;
 }

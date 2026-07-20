@@ -26,29 +26,27 @@ export function getSharedPresets(): {
 /** 静态预设引用（import time 固定）。推荐在组件中使用 getSharedPresets() 以获取实时日期。 */
 export const SHARED_PRESETS = getSharedPresets()
 
-// 类型 
+// 类型
 
 type AntDatePickerType = typeof AntDatePicker
 type AntRangePickerType = typeof AntDatePicker.RangePicker
 
-export interface AppDatePickerProps
-  extends Omit<
-    React.ComponentProps<AntDatePickerType>,
-    'variant' | 'format'
-  > {
+export interface AppDatePickerProps extends Omit<
+  React.ComponentProps<AntDatePickerType>,
+  'variant' | 'format'
+> {
   variant?: Variant
 }
 
-export interface AppRangePickerProps
-  extends Omit<
-    React.ComponentProps<AntRangePickerType>,
-    'variant' | 'format'
-  > {
+export interface AppRangePickerProps extends Omit<
+  React.ComponentProps<AntRangePickerType>,
+  'variant' | 'format'
+> {
   variant?: Variant
   presets?: ReturnType<typeof getSharedPresets>
 }
 
-//  DatePicker 
+//  DatePicker
 export const DatePicker: React.FC<AppDatePickerProps> = ({
   variant = 'b',
   format = 'YYYY-MM-DD',

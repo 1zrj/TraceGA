@@ -14,34 +14,22 @@ const ERROR_DURATION = 5
 // ─── 通知方法 ──────────────────────────────────────────────────
 
 /** 操作成功 — 顶部居中，2-3 秒自动消失 */
-export function notifySuccess(
-  content: string,
-  duration = DEFAULT_DURATION,
-): void {
+export function notifySuccess(content: string, duration = DEFAULT_DURATION): void {
   message.success(content, duration)
 }
 
 /** 操作失败 — 含原因说明，3-5 秒 */
-export function notifyError(
-  content: string,
-  duration = ERROR_DURATION,
-): void {
+export function notifyError(content: string, duration = ERROR_DURATION): void {
   message.error(content, duration)
 }
 
 /** 警告提示 */
-export function notifyWarning(
-  content: string,
-  duration = DEFAULT_DURATION,
-): void {
+export function notifyWarning(content: string, duration = DEFAULT_DURATION): void {
   message.warning(content, duration)
 }
 
 /** 信息提示 */
-export function notifyInfo(
-  content: string,
-  duration = DEFAULT_DURATION,
-): void {
+export function notifyInfo(content: string, duration = DEFAULT_DURATION): void {
   message.info(content, duration)
 }
 

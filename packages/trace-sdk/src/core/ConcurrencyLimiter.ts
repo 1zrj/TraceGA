@@ -33,7 +33,7 @@ export class ConcurrencyLimiter {
       return Promise.resolve();
     }
 
-    return new Promise<void>((resolve) => {
+    return new Promise<void>(resolve => {
       this.waitQueue.push(() => {
         this.active++;
         resolve();

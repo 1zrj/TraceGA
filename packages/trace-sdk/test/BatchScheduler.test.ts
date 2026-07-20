@@ -44,10 +44,7 @@ describe('BatchScheduler', () => {
       // 让异步 flush 完成
       await vi.advanceTimersByTimeAsync(0);
       expect(onFlush).toHaveBeenCalledTimes(1);
-      expect(onFlush).toHaveBeenCalledWith([
-        expect.objectContaining({ eventName: 'e1' }),
-        expect.objectContaining({ eventName: 'e2' }),
-      ]);
+      expect(onFlush).toHaveBeenCalledWith([expect.objectContaining({ eventName: 'e1' }), expect.objectContaining({ eventName: 'e2' })]);
     });
 
     it('should flush multiple times at each interval', async () => {
@@ -67,9 +64,7 @@ describe('BatchScheduler', () => {
       await vi.advanceTimersByTimeAsync(3000);
       await vi.advanceTimersByTimeAsync(0);
       expect(onFlush).toHaveBeenCalledTimes(2);
-      expect(onFlush.mock.calls[1][0]).toEqual([
-        expect.objectContaining({ eventName: 'e2' }),
-      ]);
+      expect(onFlush.mock.calls[1][0]).toEqual([expect.objectContaining({ eventName: 'e2' })]);
     });
   });
 
@@ -135,9 +130,7 @@ describe('BatchScheduler', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(onFlush).toHaveBeenCalledTimes(1);
-      expect(onFlush).toHaveBeenCalledWith([
-        expect.objectContaining({ eventName: 'e1' }),
-      ]);
+      expect(onFlush).toHaveBeenCalledWith([expect.objectContaining({ eventName: 'e1' })]);
 
       // 手动 flush 后定时器已重置，未到 5000ms 不触发
       onFlush.mockClear();

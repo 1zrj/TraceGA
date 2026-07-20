@@ -19,6 +19,6 @@
  * - 结果四舍五入到一位小数（乘以 1000 再除以 10）
  */
 export function calcChange(today: number, yesterday: number): number {
-  if (yesterday === 0) return today > 0 ? 100 : 0
-  return Math.round(((today - yesterday) / yesterday) * 1000) / 10
+  if (yesterday === 0) return today > 0 ? 100 : 0;
+  return Math.round(((today - yesterday) / yesterday) * 1000) / 10;
 }

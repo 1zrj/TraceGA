@@ -1,6 +1,5 @@
 // Design Token — 图表色板
 
-
 /** 10 色分类色板 — 饼图 / 柱状图 */
 export const dataPalette10 = [
   '#1677ff',
@@ -26,14 +25,7 @@ export const sequentialBlue = [
 ] as const
 
 /** 发散色板 — 正负值对比 */
-export const diverging = [
-  '#0958d9',
-  '#69b1ff',
-  '#e6f4ff',
-  '#fff1f0',
-  '#ff7875',
-  '#cf1322',
-] as const
+export const diverging = ['#0958d9', '#69b1ff', '#e6f4ff', '#fff1f0', '#ff7875', '#cf1322'] as const
 
 /** 状态标签色值映射 — bg / text / border 三色组合 */
 export const statusTags = {

@@ -68,7 +68,7 @@ export const ConfirmButton: React.FC<ConfirmButtonProps> = ({
         modalOpenRef.current = false
       },
     })
-  }, [confirmTitle, confirmContent, okText, cancelText, danger, onConfirm, onClick])
+  }, [confirmTitle, confirmContent, okText, cancelText, danger, confirmLoading, onConfirm, onClick])
 
   return (
     <Button danger={danger} onClick={handleClick} {...buttonProps}>

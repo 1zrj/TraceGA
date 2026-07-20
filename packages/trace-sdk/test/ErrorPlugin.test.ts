@@ -4,10 +4,12 @@ import { ErrorPlugin, TraceCore } from '../src';
 describe('ErrorPlugin', () => {
   it('should install and reset from TraceCore register config', () => {
     const core = new TraceCore();
-    const spy = vi.spyOn(console, 'log');
+    const reporter = { report: vi.fn() };
+
+    core.setReporter(reporter);
 
     core.register({
-      appId: 'test',
+      projectId: 'test',
       reportUrl: 'http://localhost/api',
       plugins: {
         error: true,
@@ -26,8 +28,7 @@ describe('ErrorPlugin', () => {
       }),
     );
 
-    expect(spy).toHaveBeenCalledWith(
-      '[TraceGA SDK] Event tracked:',
+    expect(reporter.report).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'error',
         eventName: 'js-error',
@@ -36,15 +37,14 @@ describe('ErrorPlugin', () => {
           message: 'configured boom',
           occurredAt: expect.any(Number),
         }),
-        url: window.location.href,
-        userAgent: navigator.userAgent,
       }),
+      'urgent',
     );
 
-    spy.mockClear();
+    reporter.report.mockClear();
 
     core.register({
-      appId: 'test',
+      projectId: 'test',
       reportUrl: 'http://localhost/api',
       plugins: {
         error: false,
@@ -57,22 +57,22 @@ describe('ErrorPlugin', () => {
       }),
     );
 
-    expect(spy).not.toHaveBeenCalledWith(
-      '[TraceGA SDK] Event tracked:',
+    expect(reporter.report).not.toHaveBeenCalledWith(
       expect.objectContaining({
         eventName: 'js-error',
       }),
+      expect.anything(),
     );
-
-    spy.mockRestore();
   });
 
   it('should apply sampleRate to plugin events', () => {
     const core = new TraceCore();
-    const spy = vi.spyOn(console, 'log');
+    const reporter = { report: vi.fn() };
+
+    core.setReporter(reporter);
 
     core.register({
-      appId: 'test',
+      projectId: 'test',
       reportUrl: 'http://localhost/api',
       sampleRate: 0,
       plugins: {
@@ -85,22 +85,13 @@ describe('ErrorPlugin', () => {
         http: false,
       },
     });
-    spy.mockClear();
-
     window.dispatchEvent(
       new ErrorEvent('error', {
         message: 'sampled out plugin error',
       }),
     );
 
-    expect(spy).not.toHaveBeenCalledWith(
-      '[TraceGA SDK] Event tracked:',
-      expect.objectContaining({
-        eventName: 'js-error',
-      }),
-    );
-
-    spy.mockRestore();
+    expect(reporter.report).not.toHaveBeenCalled();
   });
 
   it('should track js-error events', () => {
@@ -122,7 +113,6 @@ describe('ErrorPlugin', () => {
     );
 
     expect(core.trackEvent).toHaveBeenCalledWith(
-      'error',
       'js-error',
       expect.objectContaining({
         message: 'boom',
@@ -133,6 +123,8 @@ describe('ErrorPlugin', () => {
         errorName: 'Error',
         stack: error.stack,
       }),
+      'urgent',
+      'error',
     );
 
     plugin.uninstall();
@@ -170,7 +162,6 @@ describe('ErrorPlugin', () => {
     );
 
     expect(core.trackEvent).toHaveBeenCalledWith(
-      'error',
       'promise-error',
       expect.objectContaining({
         message: 'promise boom',
@@ -179,6 +170,8 @@ describe('ErrorPlugin', () => {
         errorName: 'Error',
         stack: error.stack,
       }),
+      'urgent',
+      'error',
     );
 
     plugin.uninstall();
@@ -198,13 +191,14 @@ describe('ErrorPlugin', () => {
     image.dispatchEvent(new Event('error'));
 
     expect(core.trackEvent).toHaveBeenCalledWith(
-      'error',
       'resource-error',
       expect.objectContaining({
         occurredAt: expect.any(Number),
         tagName: 'img',
         resourceUrl: 'https://cdn.example.com/missing.png',
       }),
+      'urgent',
+      'error',
     );
 
     plugin.uninstall();
@@ -229,7 +223,6 @@ describe('ErrorPlugin', () => {
       });
 
       expect(core.trackEvent).toHaveBeenCalledWith(
-        'error',
         'http-error',
         expect.objectContaining({
           requestType: 'fetch',
@@ -239,6 +232,8 @@ describe('ErrorPlugin', () => {
           status: 500,
           statusText: 'Server Error',
         }),
+        'urgent',
+        'error',
       );
     } finally {
       plugin.uninstall();
@@ -248,15 +243,16 @@ describe('ErrorPlugin', () => {
 
   it('should not track sdk reportUrl http errors', async () => {
     const core = new TraceCore();
-    const spy = vi.spyOn(console, 'log');
+    const reporter = { report: vi.fn() };
     const originalFetch = window.fetch;
     const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 500, statusText: 'Server Error' }));
 
     window.fetch = fetchMock as any;
+    core.setReporter(reporter);
 
     try {
       core.register({
-        appId: 'test',
+        projectId: 'test',
         reportUrl: 'http://localhost/api/track',
         plugins: {
           error: true,
@@ -272,16 +268,15 @@ describe('ErrorPlugin', () => {
       await window.fetch('http://localhost/api/track');
       await window.fetch('http://localhost/api/fail');
 
-      expect(spy).not.toHaveBeenCalledWith(
-        '[TraceGA SDK] Event tracked:',
+      expect(reporter.report).not.toHaveBeenCalledWith(
         expect.objectContaining({
           properties: expect.objectContaining({
             requestUrl: 'http://localhost/api/track',
           }),
         }),
+        'urgent',
       );
-      expect(spy).toHaveBeenCalledWith(
-        '[TraceGA SDK] Event tracked:',
+      expect(reporter.report).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: 'error',
           eventName: 'http-error',
@@ -290,17 +285,17 @@ describe('ErrorPlugin', () => {
             requestUrl: 'http://localhost/api/fail',
           }),
         }),
+        'urgent',
       );
     } finally {
       core.register({
-        appId: 'test',
+        projectId: 'test',
         reportUrl: 'http://localhost/api/track',
         plugins: {
           error: false,
         },
       });
       window.fetch = originalFetch;
-      spy.mockRestore();
     }
   });
 });

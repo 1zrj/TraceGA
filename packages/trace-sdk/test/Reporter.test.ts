@@ -19,9 +19,7 @@ describe('Reporter', () => {
       userAgent: 'Mozilla/5.0 Chrome',
       sendBeacon: vi.fn().mockReturnValue(true),
     });
-    fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 })
-    );
+    fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('requestIdleCallback', () => 1);
     vi.stubGlobal('cancelIdleCallback', vi.fn());
@@ -173,9 +171,7 @@ describe('Reporter', () => {
 
       // 让 fetch 返回 500
       fetchMock.mockReset();
-      fetchMock.mockResolvedValue(
-        new Response(null, { status: 500, statusText: 'Error' })
-      );
+      fetchMock.mockResolvedValue(new Response(null, { status: 500, statusText: 'Error' }));
 
       reporter.trackEvent('test_event', {});
       reporter.flush();
@@ -198,9 +194,7 @@ describe('Reporter', () => {
 
       // 重置 fetch mock 为 500
       fetchMock.mockReset();
-      fetchMock.mockResolvedValue(
-        new Response(null, { status: 500, statusText: 'Error' })
-      );
+      fetchMock.mockResolvedValue(new Response(null, { status: 500, statusText: 'Error' }));
 
       reporter.trackEvent('test_event', {});
       reporter.flush();

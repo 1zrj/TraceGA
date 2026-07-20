@@ -1,6 +1,5 @@
 // Design Token — 圆角体系
 
-
 /** 基础圆角等级 */
 export const radius = {
   none: '0px',
@@ -17,20 +16,20 @@ export const radius = {
 
 /** B 端圆角映射 — 紧凑、小圆角 */
 export const bRadius = {
-  button: radius.sm,   // 4px
-  input: radius.sm,     // 4px
-  select: radius.sm,    // 4px
-  card: radius.md,      // 6px
-  modal: radius.lg,     // 8px
-  tag: radius.xs,       // 2px
+  button: radius.sm, // 4px
+  input: radius.sm, // 4px
+  select: radius.sm, // 4px
+  card: radius.md, // 6px
+  modal: radius.lg, // 8px
+  tag: radius.xs, // 2px
 } as const
 
 /** C 端圆角映射 — 宽松、大圆角 */
 export const cRadius = {
-  button: radius.lg,    // 8px
-  input: radius.lg,     // 8px
-  select: radius.lg,    // 8px
-  card: radius.lg,      // 8px
-  modal: radius.xl,     // 12px
-  tag: radius.sm,       // 4px
+  button: radius.lg, // 8px
+  input: radius.lg, // 8px
+  select: radius.lg, // 8px
+  card: radius.lg, // 8px
+  modal: radius.xl, // 12px
+  tag: radius.sm, // 4px
 } as const

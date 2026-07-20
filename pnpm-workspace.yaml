@@ -1,7 +1,7 @@
 packages:
-  - "packages/trace-sdk"
-  - "packages/trace-server"
-  - "packages/trace-admin"
+  - 'packages/trace-sdk'
+  - 'packages/trace-server'
+  - 'packages/trace-admin'
 allowBuilds:
   '@nestjs/core': true
   '@nestjs/cli': true

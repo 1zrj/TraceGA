@@ -6,8 +6,8 @@ import { Responsive, WidthProvider } from 'react-grid-layout/legacy'
 import type { Layout, ResponsiveLayouts } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
-import { getSummary, getTrend, getTopEvents, getEventTypeTrend } from '@/api'
-import type { AnalyticsOverview, TrendData, TopEvent, EventTypeTrendItem } from '@/types'
+import { getOverview, getEventTrend, getTopEvents, getEventTypeTrend } from '@/api'
+import type { AnalyticsOverview, EventTrend, TopEvent, EventTypeTrendItem } from '@/types'
 import { StatCard } from '@/components'
 import './Dashboard.css'
 
@@ -50,7 +50,7 @@ const persistLayout = (layouts: ResponsiveLayouts): void => {
 
 export const Dashboard: React.FC = () => {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null)
-  const [trendData, setTrendData] = useState<TrendData[]>([])
+  const [eventTrend, setEventTrend] = useState<EventTrend[]>([])
   const [topEvents, setTopEvents] = useState<TopEvent[]>([])
   const [eventTypeTrend, setEventTypeTrend] = useState<EventTypeTrendItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,17 +64,14 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const now = new Date().toISOString()
-        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-
         const [overviewRes, trendRes, topRes, typeTrendRes] = await Promise.all([
-          getSummary({ startTime: weekAgo, endTime: now }),
-          getTrend({ startTime: weekAgo, endTime: now, interval: 'day' }),
+          getOverview({}),
+          getEventTrend({ interval: 'day' }),
           getTopEvents({ limit: 5 }),
-          getEventTypeTrend({ startTime: weekAgo, endTime: now }),
+          getEventTypeTrend({}),
         ])
         setOverview(overviewRes)
-        setTrendData(trendRes)
+        setEventTrend(trendRes)
         setTopEvents(topRes)
         setEventTypeTrend(typeTrendRes)
       } catch (error) {
@@ -221,26 +218,18 @@ export const Dashboard: React.FC = () => {
     },
     xAxis: {
       type: 'category' as const,
-      data: trendData.map((item) => item.time),
+      data: eventTrend.map((item) => item.time),
     },
     yAxis: {
       type: 'value' as const,
     },
     series: [
       {
-        name: 'PV',
+        name: '事件数',
         type: 'bar' as const,
-        data: trendData.map((item) => item.pv),
+        data: eventTrend.map((item) => item.count),
         itemStyle: {
           color: '#3b82f6',
-        },
-      },
-      {
-        name: 'UV',
-        type: 'line' as const,
-        data: trendData.map((item) => item.uv),
-        itemStyle: {
-          color: '#10b981',
         },
       },
     ],
@@ -265,16 +254,27 @@ export const Dashboard: React.FC = () => {
         radius: ['40%', '70%'],
         avoidLabelOverlap: false,
         itemStyle: {
-          color: '#10b981',
+          borderRadius: 4,
+          borderColor: '#fff',
+          borderWidth: 2,
         },
+        label: {
+          show: true,
+          formatter: '{b}: {c}',
+        },
+        data: topEvents.map((item, index) => ({
+          value: item.count,
+          name: item.name,
+          itemStyle: {
+            color: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index],
+          },
+        })),
       },
     ],
   }
 
   // 拖拽手柄组件（仅在编辑模式下显示）
-  const dragHandle = isEditMode ? (
-    <span className="drag-handle">⋮⋮</span>
-  ) : null
+  const dragHandle = isEditMode ? <span className="drag-handle">⋮⋮</span> : null
 
   return (
     <div className={isEditMode ? 'dashboard-edit-mode' : undefined}>
@@ -287,14 +287,9 @@ export const Dashboard: React.FC = () => {
           marginBottom: 16,
         }}
       >
-        <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1e293b', margin: 0 }}>
-          数据看板
-        </h1>
+        <h1 style={{ fontSize: 24, fontWeight: 600, color: '#1e293b', margin: 0 }}>数据看板</h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={handleResetLayout}
-          >
+          <Button icon={<ReloadOutlined />} onClick={handleResetLayout}>
             恢复默认布局
           </Button>
           <Button
@@ -325,16 +320,21 @@ export const Dashboard: React.FC = () => {
         <div key="stats" style={{ background: 'transparent' }}>
           <Row gutter={16}>
             <Col xs={24} sm={12} lg={6}>
-              <StatCard title="页面浏览量(PV)" value={overview?.pv || 0} change="+12.5%" />
+              <StatCard title="总事件数" value={overview?.totalEvents || 0} change="+12.5%" />
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <StatCard title="独立访客数(UV)" value={overview?.uv || 0} change="+8.3%" />
+              <StatCard title="总用户数" value={overview?.totalUsers || 0} change="+8.3%" />
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <StatCard title="人均访问次数" value={overview?.rate || '0'} change="+3.7%" />
+              <StatCard
+                title="平均会话时长"
+                value={`${overview?.avgSessionDuration || 0}s`}
+                change="-2.1%"
+                changeType="negative"
+              />
             </Col>
             <Col xs={24} sm={12} lg={6}>
-              <StatCard title="统计周期" value={overview ? `${overview.startTime.slice(0, 10)} ~ ${overview.endTime.slice(0, 10)}` : '-'} />
+              <StatCard title="转化率" value={`${overview?.conversionRate || 0}%`} change="+3.7%" />
             </Col>
           </Row>
         </div>
@@ -343,15 +343,21 @@ export const Dashboard: React.FC = () => {
         <div key="trend" style={{ height: '100%' }}>
           <Card
             title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>PV/UV 趋势</span>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span>每日总事件</span>
                 {dragHandle}
               </div>
             }
             styles={{ body: { height: 'calc(100% - 57px)', padding: 16 } }}
             style={{ height: '100%', overflow: 'hidden' }}
           >
-            <ReactECharts key={`trend-${chartKey}`} option={trendOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts
+              key={`trend-${chartKey}`}
+              option={trendOption}
+              style={{ height: '100%', width: '100%' }}
+            />
           </Card>
         </div>
 
@@ -359,7 +365,9 @@ export const Dashboard: React.FC = () => {
         <div key="pie" style={{ height: '100%' }}>
           <Card
             title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <span>热门事件</span>
                 {dragHandle}
               </div>
@@ -367,15 +375,21 @@ export const Dashboard: React.FC = () => {
             styles={{ body: { height: 'calc(100% - 57px)', padding: 16 } }}
             style={{ height: '100%', overflow: 'hidden' }}
           >
-            <ReactECharts key={`pie-${chartKey}`} option={topEventsOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts
+              key={`pie-${chartKey}`}
+              option={topEventsOption}
+              style={{ height: '100%', width: '100%' }}
+            />
           </Card>
         </div>
 
-        {/* 事件类型趋势对比 */}
+        {/* 事件类型趋势堆叠柱状图 */}
         <div key="type-trend" style={{ height: '100%' }}>
           <Card
             title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <span>事件类型趋势对比</span>
                 {dragHandle}
               </div>
@@ -383,7 +397,11 @@ export const Dashboard: React.FC = () => {
             styles={{ body: { height: 'calc(100% - 57px)', padding: 16 } }}
             style={{ height: '100%', overflow: 'hidden' }}
           >
-            <ReactECharts key={`type-trend-${chartKey}`} option={typeTrendOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts
+              key={`type-trend-${chartKey}`}
+              option={typeTrendOption}
+              style={{ height: '100%', width: '100%' }}
+            />
           </Card>
         </div>
 
@@ -391,7 +409,9 @@ export const Dashboard: React.FC = () => {
         <div key="funnel" style={{ height: '100%' }}>
           <Card
             title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <span>用户行为漏斗</span>
                 {dragHandle}
               </div>
@@ -399,7 +419,11 @@ export const Dashboard: React.FC = () => {
             styles={{ body: { height: 'calc(100% - 57px)', padding: 16 } }}
             style={{ height: '100%', overflow: 'hidden' }}
           >
-            <ReactECharts key={`funnel-${chartKey}`} option={funnelOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts
+              key={`funnel-${chartKey}`}
+              option={funnelOption}
+              style={{ height: '100%', width: '100%' }}
+            />
           </Card>
         </div>
       </ResponsiveGridLayout>
