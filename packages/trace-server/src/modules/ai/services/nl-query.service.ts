@@ -14,6 +14,7 @@ import { NlQueryDto } from '../dto/nl-query.dto'
 import { AnalysisService } from '../../analysis/services/analysis.service'
 import { GlmClientService } from './glm-client.service'
 import { PromptService } from './prompt.service'
+import { parseAIJson } from './ai.utils'
 
 // ---------------------------------------------------------------------------
 // 类型定义
@@ -41,8 +42,8 @@ const MAX_DATE_RANGE = 90
 const ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/
 
 /** GLM 调用参数 */
-const PARSE_MAX_TOKENS = 200      // 解析 JSON 输出很小
-const ANSWER_MAX_TOKENS = 800     // 回答需要一定长度
+const PARSE_MAX_TOKENS = 200 // 解析 JSON 输出很小
+const ANSWER_MAX_TOKENS = 800 // 回答需要一定长度
 
 // ---------------------------------------------------------------------------
 // Service
@@ -69,8 +70,8 @@ export class NlQueryService {
 
     this.logger.log(
       `NL 查询解析成功 | question="${dto.question.slice(0, 50)}" | ` +
-      `startTime=${queryJson.startTime} endTime=${queryJson.endTime} ` +
-      `eventTypes=[${queryJson.eventTypes.join(',')}] limit=${queryJson.limit}`,
+        `startTime=${queryJson.startTime} endTime=${queryJson.endTime} ` +
+        `eventTypes=[${queryJson.eventTypes.join(',')}] limit=${queryJson.limit}`,
     )
 
     // 步骤 3：执行查询
@@ -108,23 +109,14 @@ export class NlQueryService {
 
   /**
    * 解析 GLM 返回的 JSON。
-   * 三层容错：JSON.parse → 正则提取 → 抛错
+   * 三层容错：直接 parse → 正则提取 → 抛错
    */
   private parseNLJSON(content: string): Record<string, unknown> {
-    try {
-      return JSON.parse(content)
-    } catch {}
-
-    const match = content.match(/\{[\s\S]*\}/)
-    if (match) {
-      try {
-        return JSON.parse(match[0])
-      } catch {}
+    const parsed = parseAIJson<Record<string, unknown> | null>(content, null)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed
     }
-
-    throw new BadRequestException(
-      `AI 返回的查询条件格式异常，请换种方式描述你的问题。原始输出：${content.slice(0, 200)}`,
-    )
+    throw new BadRequestException(`AI 返回的查询条件格式异常，请换种方式描述你的问题。原始输出：${content.slice(0, 200)}`)
   }
 
   // ===== 步骤 2：JSON 校验 =====
@@ -146,40 +138,29 @@ export class NlQueryService {
     // startTime
     const startTime = String(cleaned.startTime || '')
     if (!ISO_PATTERN.test(startTime)) {
-      throw new BadRequestException(
-        `查询起始时间格式错误：${startTime || '(空)'}，期望格式 YYYY-MM-DDTHH:mm:ss`,
-      )
+      throw new BadRequestException(`查询起始时间格式错误：${startTime || '(空)'}，期望格式 YYYY-MM-DDTHH:mm:ss`)
     }
 
     // endTime
     const endTime = String(cleaned.endTime || '')
     if (!ISO_PATTERN.test(endTime)) {
-      throw new BadRequestException(
-        `查询结束时间格式错误：${endTime || '(空)'}，期望格式 YYYY-MM-DDTHH:mm:ss`,
-      )
+      throw new BadRequestException(`查询结束时间格式错误：${endTime || '(空)'}，期望格式 YYYY-MM-DDTHH:mm:ss`)
     }
 
     if (new Date(startTime) >= new Date(endTime)) {
       throw new BadRequestException('起始时间必须早于结束时间')
     }
 
-    const diffDays =
-      (new Date(endTime).getTime() - new Date(startTime).getTime()) / 86400000
+    const diffDays = (new Date(endTime).getTime() - new Date(startTime).getTime()) / 86400000
     if (diffDays > MAX_DATE_RANGE) {
-      throw new BadRequestException(
-        `查询时间范围不能超过 ${MAX_DATE_RANGE} 天，当前范围为 ${Math.round(diffDays)} 天`,
-      )
+      throw new BadRequestException(`查询时间范围不能超过 ${MAX_DATE_RANGE} 天，当前范围为 ${Math.round(diffDays)} 天`)
     }
 
     // eventTypes
     let eventTypes: string[] = []
     if (Array.isArray(cleaned.eventTypes)) {
-      eventTypes = (cleaned.eventTypes as string[]).filter((t) =>
-        ALLOWED_EVENT_TYPES.includes(t),
-      )
-      const invalid = (cleaned.eventTypes as string[]).filter(
-        (t) => !ALLOWED_EVENT_TYPES.includes(t),
-      )
+      eventTypes = (cleaned.eventTypes as string[]).filter(t => ALLOWED_EVENT_TYPES.includes(t))
+      const invalid = (cleaned.eventTypes as string[]).filter(t => !ALLOWED_EVENT_TYPES.includes(t))
       if (invalid.length > 0) {
         this.logger.warn(`GLM 返回了非法的 eventTypes，已过滤: [${invalid.join(',')}]`)
       }
@@ -191,10 +172,7 @@ export class NlQueryService {
     if (limit > 100) limit = 100
 
     // orderBy
-    const orderBy =
-      cleaned.orderBy === 'asc' || cleaned.orderBy === 'desc'
-        ? cleaned.orderBy
-        : 'desc'
+    const orderBy = cleaned.orderBy === 'asc' || cleaned.orderBy === 'desc' ? cleaned.orderBy : 'desc'
 
     return { startTime, endTime, eventTypes, limit, orderBy }
   }
@@ -218,11 +196,7 @@ export class NlQueryService {
 
   // ===== 步骤 4：data → 自然语言回答 =====
 
-  private async generateAnswer(
-    question: string,
-    queryJson: NlQueryJson,
-    data: unknown,
-  ): Promise<string> {
+  private async generateAnswer(question: string, queryJson: NlQueryJson, data: unknown): Promise<string> {
     const systemPrompt = this.promptService.system('nl-query.answer')
     const userPrompt = this.promptService.user('nl-query.answer', {
       question,
