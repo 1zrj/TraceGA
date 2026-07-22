@@ -6,6 +6,7 @@ import { TrackService } from '../services/track.service'
 import { TrackRepository } from '../repositories/track.repository'
 import { EventProcessorFactory } from '../processors/event.processor'
 import { TrackEventDto } from '../dto/track-event.dto'
+import { JsonSchemaValidator } from '../validators/json-schema.validator'
 
 jest.mock('@generated/prisma', () => ({ Prisma: { JsonNull: null } }), { virtual: true })
 jest.mock('@/database/prisma.service', () => ({ PrismaService: class {} }), { virtual: true })
@@ -23,7 +24,14 @@ describe('TrackService', () => {
   const processor = {
     process: jest.fn(event => ({ ...event, processed: true })),
   }
-  const service = new TrackService(repository as unknown as TrackRepository, processorFactory as unknown as EventProcessorFactory)
+  const jsonSchemaValidator = {
+    validate: jest.fn(),
+  }
+  const service = new TrackService(
+    repository as unknown as TrackRepository,
+    processorFactory as unknown as EventProcessorFactory,
+    jsonSchemaValidator as unknown as JsonSchemaValidator,
+  )
   const event: TrackEventDto = {
     eventId: 'evt_001',
     eventType: 'custom',
@@ -44,6 +52,7 @@ describe('TrackService', () => {
       received: true,
     })
     expect(repository.insertEvent).toHaveBeenCalledWith(expect.objectContaining({ processed: true }), '127.0.0.1', 'jest')
+    expect(jsonSchemaValidator.validate).toHaveBeenCalledWith({}, undefined)
   })
 
   it('rejects an unknown project before processing', async () => {
@@ -81,5 +90,25 @@ describe('TrackService', () => {
   it('does not hide a database batch failure', async () => {
     repository.insertBatch.mockRejectedValueOnce(new Error('database unavailable'))
     await expect(service.trackBatch({ events: [event] }, '', '')).rejects.toThrow('database unavailable')
+  })
+
+  it('returns a schema validation failure as a failed batch item', async () => {
+    repository.findActiveEventDefinitions.mockResolvedValue([
+      {
+        appId: 'app_001',
+        eventName: 'checkout_submit',
+        eventType: 'custom',
+        propertySchema: { type: 'object' },
+      },
+    ])
+    jsonSchemaValidator.validate.mockImplementationOnce(() => {
+      throw new BadRequestException('properties do not match param_schema')
+    })
+
+    await expect(service.trackBatch({ events: [event] }, '', '')).resolves.toEqual({
+      successCount: 0,
+      failedCount: 1,
+      failures: [{ index: 0, eventId: 'evt_001', reason: 'properties do not match param_schema' }],
+    })
   })
 })

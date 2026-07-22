@@ -12,7 +12,9 @@ describe('Track DTO validation', () => {
     eventType: 'custom',
     eventName: 'checkout_submit',
     appId: 'app_001',
+    anonymousId: 'anonymous_001',
     properties: { source: 'cart' },
+    commonParams: { browser: 'Chrome' },
     timestamp: 1784390000000,
   }
 

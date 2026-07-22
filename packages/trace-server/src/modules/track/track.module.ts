@@ -12,6 +12,7 @@ import {
   PerformanceEventProcessor,
   WhiteScreenProcessor,
 } from './processors/event.processor'
+import { JsonSchemaValidator } from './validators/json-schema.validator'
 
 @Module({
   controllers: [TrackController],
@@ -26,6 +27,7 @@ import {
     PerformanceEventProcessor,
     WhiteScreenProcessor,
     DefaultProcessor,
+    JsonSchemaValidator,
   ],
   exports: [TrackService],
 })

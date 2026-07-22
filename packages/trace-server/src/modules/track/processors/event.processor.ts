@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common'
 import { TrackEvent } from '../entities/track.entity'
 
 const MAX_PROPERTIES_BYTES = 10 * 1024
+const MAX_COMMON_PARAMS_BYTES = 10 * 1024
 const MAX_PROPERTY_DEPTH = 5
 const MAX_PROPERTY_KEYS = 100
 const MAX_PROPERTY_STRING_LENGTH = 512
@@ -27,9 +28,13 @@ abstract class BaseEventProcessor implements EventProcessor {
 
   private sanitizeEvent(event: TrackEvent): TrackEvent {
     const properties = event.properties ? (this.sanitizeValue(event.properties, 0) as Record<string, any>) : undefined
+    const commonParams = event.commonParams ? (this.sanitizeValue(event.commonParams, 0) as Record<string, any>) : undefined
 
     if (properties && Buffer.byteLength(JSON.stringify(properties), 'utf8') > MAX_PROPERTIES_BYTES) {
       throw new BadRequestException('properties must not exceed 10 KB')
+    }
+    if (commonParams && Buffer.byteLength(JSON.stringify(commonParams), 'utf8') > MAX_COMMON_PARAMS_BYTES) {
+      throw new BadRequestException('commonParams must not exceed 10 KB')
     }
 
     return {
@@ -39,10 +44,12 @@ abstract class BaseEventProcessor implements EventProcessor {
       eventName: event.eventName.trim(),
       appId: event.appId.trim(),
       userId: event.userId?.trim() || undefined,
+      anonymousId: event.anonymousId?.trim() || undefined,
       sessionId: event.sessionId?.trim() || undefined,
       url: event.url?.trim() || undefined,
       referrer: event.referrer?.trim() || undefined,
       properties,
+      commonParams,
     }
   }
 
@@ -167,7 +174,7 @@ export class WhiteScreenProcessor extends BaseEventProcessor {
 
 @Injectable()
 export class DefaultProcessor extends BaseEventProcessor {
-  canProcess(eventType: string): boolean {
+  canProcess(_eventType: string): boolean {
     return true
   }
 }

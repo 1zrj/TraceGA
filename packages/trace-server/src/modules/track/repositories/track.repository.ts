@@ -34,6 +34,7 @@ export class TrackRepository {
         project_id: true,
         event_name: true,
         event_type: true,
+        param_schema: true,
       },
     })
 
@@ -41,6 +42,7 @@ export class TrackRepository {
       appId: definition.project_id,
       eventName: definition.event_name,
       eventType: definition.event_type ?? '',
+      propertySchema: definition.param_schema as Record<string, any> | null,
     }))
   }
 
@@ -78,7 +80,7 @@ export class TrackRepository {
       session_id: event.sessionId || null,
       page_url: event.url || null,
       event_params: event.properties ?? Prisma.JsonNull,
-      common_params: event.referrer ? { referrer: event.referrer } : Prisma.JsonNull,
+      common_params: this.buildCommonParams(event),
       user_agent: userAgent || event.userAgent || null,
       ip: ip || null,
     }
@@ -86,5 +88,14 @@ export class TrackRepository {
 
   private toOccurredAt(timestamp?: number): Date {
     return timestamp !== undefined ? new Date(timestamp) : new Date()
+  }
+
+  private buildCommonParams(event: TrackEvent): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+    const commonParams = {
+      ...(event.commonParams ?? {}),
+      ...(event.anonymousId && { anonymousId: event.anonymousId }),
+      ...(event.referrer && { referrer: event.referrer }),
+    }
+    return Object.keys(commonParams).length > 0 ? commonParams : Prisma.JsonNull
   }
 }
