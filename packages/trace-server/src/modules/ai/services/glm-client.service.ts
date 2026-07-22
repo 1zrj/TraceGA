@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { CircuitBreaker, CircuitBreakerOpenError } from './circuit-breaker'
+import { CircuitBreaker } from './circuit-breaker'
 
 /**
  * GLM API 调用参数
@@ -101,8 +101,89 @@ export class GlmClientService {
   }
 
   /**
-   * 执行单次 HTTP 请求
+   * 流式调用 GLM 对话接口
+   *
+   * 返回一个 AsyncGenerator，每次 yield GLM 返回的一段文本（通常是一个字或一个词）。
+   * 调用方用 for await...of 消费。
+   *
+   * 不包含重试逻辑 —— 流式没法重试（已经推送给前端了）。
+   * 不包含熔断器保护 —— 熔断由非流式调用负责累积计数。
    */
+  async *chatStream(systemPrompt: string, userPrompt: string, options: GlmChatOptions = {}): AsyncGenerator<string> {
+    const { temperature = 0.3, maxTokens = 1024 } = options
+
+    const apiKey = this.configService.get<string>('GLM_API_KEY', '')
+    const model = this.configService.get<string>('GLM_MODEL', 'glm-4-flash')
+
+    if (!apiKey) {
+      throw new Error('GLM_API_KEY 未配置，请在环境变量中设置 GLM_API_KEY')
+    }
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+
+    try {
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature,
+          max_tokens: maxTokens,
+          stream: true,
+        }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '无法读取响应体')
+        throw new Error(`GLM API 返回错误 [${response.status}]: ${errorBody}`)
+      }
+
+      // 逐行读取 SSE 流
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += value
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // 最后一段可能不完整，留到下次
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed || !trimmed.startsWith('data: ')) continue
+
+          const data = trimmed.slice(6) // 去掉 "data: " 前缀
+          if (data === '[DONE]') return
+
+          try {
+            const parsed = JSON.parse(data)
+            const content: string = parsed?.choices?.[0]?.delta?.content || ''
+            if (content) yield content
+          } catch {
+            // 个别行解析失败跳过（非关键）
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error(`GLM API 请求超时（${this.timeout / 1000}秒）`)
+      }
+      throw err
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
   private async doRequest(apiKey: string, model: string, systemPrompt: string, userPrompt: string, temperature: number, maxTokens: number): Promise<GlmChatResult> {
     const startTime = Date.now()
 

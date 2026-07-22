@@ -1,27 +1,16 @@
-/**
- * DailyReportService
- *
- * 职责：生成每日数据日报。
- * 对比目标日期与前一日的数据（PV/UV/事件排行/趋势/错误事件），
- * 将统计数据拼成 JSON 发给 GLM，返回自然语言日报。
- *
- * 不涉及通用问答或异常解释 —— 那是另外两个 Service 的职责。
- */
-
 import { Injectable, Logger } from '@nestjs/common'
 import { AnalysisService } from '../../analysis/services/analysis.service'
 import { GlmClientService } from './glm-client.service'
 import { PromptService } from './prompt.service'
-import { calcChange } from './ai.utils'
+import { calcChange, SSEMessage } from './ai.utils'
 
-/** 日报缓存 TTL：1 小时（昨日数据不再变化，1 小时足够） */
 const CACHE_TTL_MS = 3_600_000
+const TEMPERATURE = 0.5
+const MAX_TOKENS = 1024
 
 @Injectable()
 export class DailyReportService {
   private readonly logger = new Logger(DailyReportService.name)
-
-  /** 日报缓存：key = appId:date，value = { data, cachedAt } */
   private readonly reportCache = new Map<string, { data: any; cachedAt: number }>()
 
   constructor(
@@ -30,10 +19,11 @@ export class DailyReportService {
     private readonly promptService: PromptService,
   ) {}
 
+  // ===== 非流式 =====
+
   async generateDailyReport(appId: string, date?: string) {
     const targetDate = date || this.getYesterday()
 
-    // ---- 缓存命中检查 ----
     const cacheKey = `${appId}:${targetDate}`
     const cached = this.reportCache.get(cacheKey)
     if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
@@ -41,8 +31,50 @@ export class DailyReportService {
       return cached.data
     }
 
-    const yesterdayDate = this.getDayBefore(targetDate)
+    const { stats, systemPrompt, userPrompt } = await this.prepareData(appId, targetDate)
 
+    try {
+      const result = await this.glmClient.chat(systemPrompt, userPrompt, {
+        temperature: TEMPERATURE,
+        maxTokens: MAX_TOKENS,
+      })
+
+      const data = { stats, report: result.content, generatedAt: new Date().toISOString() }
+      this.reportCache.set(cacheKey, { data, cachedAt: Date.now() })
+      return data
+    } catch (err) {
+      this.logger.error('日报生成失败', err)
+      return { stats, report: 'AI 日报生成失败，请稍后重试。以下是今日原始数据。', generatedAt: new Date().toISOString() }
+    }
+  }
+
+  // ===== 流式 =====
+
+  async *generateDailyReportStream(appId: string, date?: string): AsyncGenerator<SSEMessage> {
+    const targetDate = date || this.getYesterday()
+    const { stats, systemPrompt, userPrompt } = await this.prepareData(appId, targetDate)
+
+    yield { type: 'stats', stats }
+
+    try {
+      for await (const chunk of this.glmClient.chatStream(systemPrompt, userPrompt, {
+        temperature: TEMPERATURE,
+        maxTokens: MAX_TOKENS,
+      })) {
+        yield { type: 'text', content: chunk }
+      }
+    } catch (err) {
+      this.logger.error('日报流式生成失败', err)
+      yield { type: 'error', message: 'AI 日报生成失败，请稍后重试' }
+    }
+
+    yield { type: 'done' }
+  }
+
+  // ===== 数据准备（公共） =====
+
+  private async prepareData(appId: string, targetDate: string) {
+    const yesterdayDate = this.getDayBefore(targetDate)
     const startOfDay = `${targetDate}T00:00:00`
     const endOfDay = `${targetDate}T23:59:59`
     const startOfYesterday = `${yesterdayDate}T00:00:00`
@@ -56,56 +88,21 @@ export class DailyReportService {
       this.analysisService.getFiltered({ appId, eventTypes: ['error'], startTime: startOfDay, endTime: endOfDay }),
     ])
 
-    const pvChange = calcChange(todaySummary.pv, yesterdaySummary.pv)
-    const uvChange = calcChange(todaySummary.uv, yesterdaySummary.uv)
-    const eventTrends = this.buildEventTrends(todayEvents, yesterdayEvents)
-
     const stats = {
       date: targetDate,
       totalPv: todaySummary.pv,
       totalUv: todaySummary.uv,
-      pvChange,
-      uvChange,
-      topEvents: todayEvents.slice(0, 5).map(e => ({
-        eventName: e.event_name,
-        pv: e.count,
-      })),
-      eventTrends: eventTrends.filter(t => Math.abs(t.pvChange) >= 10),
-      errorEvents: errorEvents.map(e => ({
-        eventName: e.event_name,
-        count: e.count,
-      })),
+      pvChange: calcChange(todaySummary.pv, yesterdaySummary.pv),
+      uvChange: calcChange(todaySummary.uv, yesterdaySummary.uv),
+      topEvents: todayEvents.slice(0, 5).map(e => ({ eventName: e.event_name, pv: e.count })),
+      eventTrends: this.buildEventTrends(todayEvents, yesterdayEvents).filter(t => Math.abs(t.pvChange) >= 10),
+      errorEvents: errorEvents.map(e => ({ eventName: e.event_name, count: e.count })),
     }
 
     const systemPrompt = this.promptService.system('daily-report')
-    const userPrompt = this.promptService.user('daily-report', {
-      statsJson: JSON.stringify(stats, null, 2),
-    })
+    const userPrompt = this.promptService.user('daily-report', { statsJson: JSON.stringify(stats, null, 2) })
 
-    try {
-      const result = await this.glmClient.chat(systemPrompt, userPrompt, {
-        temperature: 0.5,
-        maxTokens: 1024,
-      })
-
-      const data = {
-        stats,
-        report: result.content,
-        generatedAt: new Date().toISOString(),
-      }
-
-      // ---- 写入缓存 ----
-      this.reportCache.set(cacheKey, { data, cachedAt: Date.now() })
-
-      return data
-    } catch (err) {
-      this.logger.error('日报生成失败', err)
-      return {
-        stats,
-        report: 'AI 日报生成失败，请稍后重试。以下是今日原始数据。',
-        generatedAt: new Date().toISOString(),
-      }
-    }
+    return { stats, systemPrompt, userPrompt }
   }
 
   // ===== 辅助方法 =====
@@ -122,21 +119,12 @@ export class DailyReportService {
     return d.toISOString().slice(0, 10)
   }
 
-  private buildEventTrends(
-    todayEvents: Array<{ event_name: string; count: number }>,
-    yesterdayEvents: Array<{ event_name: string; count: number }>,
-  ): Array<{ eventName: string; todayPv: number; yesterdayPv: number; pvChange: number }> {
+  private buildEventTrends(todayEvents: Array<{ event_name: string; count: number }>, yesterdayEvents: Array<{ event_name: string; count: number }>) {
     const yesterdayMap = new Map<string, number>()
     yesterdayEvents.forEach(e => yesterdayMap.set(e.event_name, e.count))
-
     return todayEvents.map(e => {
       const yesterdayPv = yesterdayMap.get(e.event_name) || 0
-      return {
-        eventName: e.event_name,
-        todayPv: e.count,
-        yesterdayPv,
-        pvChange: calcChange(e.count, yesterdayPv),
-      }
+      return { eventName: e.event_name, todayPv: e.count, yesterdayPv, pvChange: calcChange(e.count, yesterdayPv) }
     })
   }
 }

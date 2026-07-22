@@ -1,26 +1,10 @@
-/**
- * NlQueryService
- *
- * 职责：自然语言查询。用户输入中文问题 → GLM 解析为查询条件 JSON →
- *       校验 → 执行 ClickHouse 查询 → GLM 生成自然语言回答。
- *
- * 两次 GLM 调用：一次解析（NL→JSON），一次回答（data→NL）。
- *
- * 不涉及日报生成、异常解释或通用问答 —— 那是另外三个 Service 的职责。
- */
-
 import { Injectable, Logger, BadRequestException } from '@nestjs/common'
 import { NlQueryDto } from '../dto/nl-query.dto'
 import { AnalysisService } from '../../analysis/services/analysis.service'
 import { GlmClientService } from './glm-client.service'
 import { PromptService } from './prompt.service'
-import { parseAIJson } from './ai.utils'
+import { parseAIJson, SSEMessage } from './ai.utils'
 
-// ---------------------------------------------------------------------------
-// 类型定义
-// ---------------------------------------------------------------------------
-
-/** GLM 解析出的合法查询条件 */
 export interface NlQueryJson {
   startTime: string
   endTime: string
@@ -28,26 +12,12 @@ export interface NlQueryJson {
   limit: number
   orderBy: 'asc' | 'desc'
 }
-
-/** 白名单：允许 GLM 输出的字段名 */
 const ALLOWED_FIELDS = ['startTime', 'endTime', 'eventTypes', 'limit', 'orderBy']
-
-/** 允许的 eventTypes 枚举值 */
 const ALLOWED_EVENT_TYPES = ['click', 'pageview', 'error', 'custom']
-
-/** 日期范围上限（天） */
 const MAX_DATE_RANGE = 90
-
-/** 日期格式正则 */
 const ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/
-
-/** GLM 调用参数 */
-const PARSE_MAX_TOKENS = 200 // 解析 JSON 输出很小
-const ANSWER_MAX_TOKENS = 800 // 回答需要一定长度
-
-// ---------------------------------------------------------------------------
-// Service
-// ---------------------------------------------------------------------------
+const PARSE_MAX_TOKENS = 200
+const ANSWER_MAX_TOKENS = 800
 
 @Injectable()
 export class NlQueryService {
@@ -59,125 +29,112 @@ export class NlQueryService {
     private readonly promptService: PromptService,
   ) {}
 
-  // ===== 主入口 =====
+  // ===== 非流式 =====
 
   async processQuery(dto: NlQueryDto) {
-    // 步骤 1：NL → 查询 JSON
-    const rawJson = await this.parseQuestion(dto.question)
-
-    // 步骤 2：校验 + 清洗
-    const queryJson = this.validateQueryJson(rawJson)
-
-    this.logger.log(
-      `NL 查询解析成功 | question="${dto.question.slice(0, 50)}" | ` +
-        `startTime=${queryJson.startTime} endTime=${queryJson.endTime} ` +
-        `eventTypes=[${queryJson.eventTypes.join(',')}] limit=${queryJson.limit}`,
-    )
-
-    // 步骤 3：执行查询
+    const queryJson = await this.parseAndValidate(dto.question)
     const data = await this.executeQuery(dto.appId, queryJson)
-
-    // 步骤 4：data → 自然语言回答
     const answer = await this.generateAnswer(dto.question, queryJson, data)
-
-    return {
-      question: dto.question,
-      queryJson,
-      data,
-      answer,
-      generatedAt: new Date().toISOString(),
-    }
+    return { question: dto.question, queryJson, data, answer, generatedAt: new Date().toISOString() }
   }
 
-  // ===== 步骤 1：NL → JSON =====
+  // ===== 流式 =====
 
-  /**
-   * 将用户问题发给 GLM 解析为查询条件 JSON。
-   */
-  private async parseQuestion(question: string): Promise<Record<string, unknown>> {
+  async *processQueryStream(dto: NlQueryDto): AsyncGenerator<SSEMessage> {
+    // 步骤 1-2：NL→JSON（非流式，必须等完整结果）
+    let queryJson: NlQueryJson
+    try {
+      queryJson = await this.parseAndValidate(dto.question)
+    } catch (err) {
+      yield { type: 'error', message: err instanceof BadRequestException ? err.message : '查询解析失败' }
+      yield { type: 'done' }
+      return
+    }
+
+    yield { type: 'stats', stats: { queryJson } }
+
+    // 步骤 3：执行查询
+    let data: unknown
+    try {
+      data = await this.executeQuery(dto.appId, queryJson)
+    } catch (err) {
+      this.logger.error('NL 查询执行失败', err)
+      yield { type: 'error', message: '数据查询失败' }
+      yield { type: 'done' }
+      return
+    }
+
+    yield { type: 'stats', stats: { data } }
+
+    // 步骤 4：生成回答（流式）
+    const systemPrompt = this.promptService.system('nl-query.answer')
+    const userPrompt = this.promptService.user('nl-query.answer', {
+      question: dto.question,
+      queryJson: JSON.stringify(queryJson, null, 2),
+      dataJson: JSON.stringify(data, null, 2),
+    })
+
+    try {
+      for await (const chunk of this.glmClient.chatStream(systemPrompt, userPrompt, { temperature: 0.3, maxTokens: ANSWER_MAX_TOKENS })) {
+        yield { type: 'text', content: chunk }
+      }
+    } catch (err) {
+      this.logger.error('NL 回答流式生成失败', err)
+      yield { type: 'error', message: 'AI 回答生成失败' }
+    }
+
+    yield { type: 'done' }
+  }
+
+  // ===== 公共：解析 + 校验 =====
+
+  private async parseAndValidate(question: string): Promise<NlQueryJson> {
     const today = this.getTodayISO()
     const systemPrompt = this.promptService.system('nl-query.parse', { today })
     const userPrompt = this.promptService.user('nl-query.parse', { question })
 
-    const result = await this.glmClient.chat(systemPrompt, userPrompt, {
-      temperature: 0.1,
-      maxTokens: PARSE_MAX_TOKENS,
-    })
-
-    return this.parseNLJSON(result.content)
+    const result = await this.glmClient.chat(systemPrompt, userPrompt, { temperature: 0.1, maxTokens: PARSE_MAX_TOKENS })
+    const raw = this.parseJSON(result.content)
+    return this.validateQueryJson(raw)
   }
 
-  /**
-   * 解析 GLM 返回的 JSON。
-   * 三层容错：直接 parse → 正则提取 → 抛错
-   */
-  private parseNLJSON(content: string): Record<string, unknown> {
+  private parseJSON(content: string): Record<string, unknown> {
     const parsed = parseAIJson<Record<string, unknown> | null>(content, null)
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed
-    }
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
     throw new BadRequestException(`AI 返回的查询条件格式异常，请换种方式描述你的问题。原始输出：${content.slice(0, 200)}`)
   }
 
-  // ===== 步骤 2：JSON 校验 =====
-
-  /**
-   * 校验 GLM 返回的查询 JSON。
-   * - 只保留白名单字段
-   * - 必填字段缺失 → 抛错
-   * - 类型/值域不合法 → 抛错
-   */
   private validateQueryJson(raw: Record<string, unknown>): NlQueryJson {
     const cleaned: Record<string, unknown> = {}
     for (const key of ALLOWED_FIELDS) {
-      if (key in raw) {
-        cleaned[key] = raw[key]
-      }
+      if (key in raw) cleaned[key] = raw[key]
     }
 
-    // startTime
     const startTime = String(cleaned.startTime || '')
-    if (!ISO_PATTERN.test(startTime)) {
-      throw new BadRequestException(`查询起始时间格式错误：${startTime || '(空)'}，期望格式 YYYY-MM-DDTHH:mm:ss`)
-    }
+    if (!ISO_PATTERN.test(startTime)) throw new BadRequestException(`查询起始时间格式错误：${startTime || '(空)'}，期望格式 YYYY-MM-DDTHH:mm:ss`)
 
-    // endTime
     const endTime = String(cleaned.endTime || '')
-    if (!ISO_PATTERN.test(endTime)) {
-      throw new BadRequestException(`查询结束时间格式错误：${endTime || '(空)'}，期望格式 YYYY-MM-DDTHH:mm:ss`)
-    }
+    if (!ISO_PATTERN.test(endTime)) throw new BadRequestException(`查询结束时间格式错误：${endTime || '(空)'}，期望格式 YYYY-MM-DDTHH:mm:ss`)
 
-    if (new Date(startTime) >= new Date(endTime)) {
-      throw new BadRequestException('起始时间必须早于结束时间')
-    }
+    if (new Date(startTime) >= new Date(endTime)) throw new BadRequestException('起始时间必须早于结束时间')
 
     const diffDays = (new Date(endTime).getTime() - new Date(startTime).getTime()) / 86400000
-    if (diffDays > MAX_DATE_RANGE) {
-      throw new BadRequestException(`查询时间范围不能超过 ${MAX_DATE_RANGE} 天，当前范围为 ${Math.round(diffDays)} 天`)
-    }
+    if (diffDays > MAX_DATE_RANGE) throw new BadRequestException(`查询时间范围不能超过 ${MAX_DATE_RANGE} 天，当前范围为 ${Math.round(diffDays)} 天`)
 
-    // eventTypes
     let eventTypes: string[] = []
     if (Array.isArray(cleaned.eventTypes)) {
       eventTypes = (cleaned.eventTypes as string[]).filter(t => ALLOWED_EVENT_TYPES.includes(t))
       const invalid = (cleaned.eventTypes as string[]).filter(t => !ALLOWED_EVENT_TYPES.includes(t))
-      if (invalid.length > 0) {
-        this.logger.warn(`GLM 返回了非法的 eventTypes，已过滤: [${invalid.join(',')}]`)
-      }
+      if (invalid.length > 0) this.logger.warn(`GLM 返回了非法的 eventTypes，已过滤: [${invalid.join(',')}]`)
     }
 
-    // limit
     let limit = Number(cleaned.limit) || 10
     if (!Number.isInteger(limit) || limit < 1) limit = 10
     if (limit > 100) limit = 100
 
-    // orderBy
     const orderBy = cleaned.orderBy === 'asc' || cleaned.orderBy === 'desc' ? cleaned.orderBy : 'desc'
-
-    return { startTime, endTime, eventTypes, limit, orderBy }
+    return { startTime, endTime, eventTypes, limit, orderBy } as NlQueryJson
   }
-
-  // ===== 步骤 3：执行查询 =====
 
   private async executeQuery(appId: string, query: NlQueryJson) {
     const result = await this.analysisService.getFiltered({
@@ -186,15 +143,9 @@ export class NlQueryService {
       endTime: query.endTime,
       eventTypes: query.eventTypes.length > 0 ? query.eventTypes : undefined,
     })
-
-    const sorted = [...result].sort((a, b) => {
-      return query.orderBy === 'desc' ? b.count - a.count : a.count - b.count
-    })
-
+    const sorted = [...result].sort((a, b) => (query.orderBy === 'desc' ? b.count - a.count : a.count - b.count))
     return sorted.slice(0, query.limit)
   }
-
-  // ===== 步骤 4：data → 自然语言回答 =====
 
   private async generateAnswer(question: string, queryJson: NlQueryJson, data: unknown): Promise<string> {
     const systemPrompt = this.promptService.system('nl-query.answer')
@@ -203,12 +154,8 @@ export class NlQueryService {
       queryJson: JSON.stringify(queryJson, null, 2),
       dataJson: JSON.stringify(data, null, 2),
     })
-
     try {
-      const result = await this.glmClient.chat(systemPrompt, userPrompt, {
-        temperature: 0.3,
-        maxTokens: ANSWER_MAX_TOKENS,
-      })
+      const result = await this.glmClient.chat(systemPrompt, userPrompt, { temperature: 0.3, maxTokens: ANSWER_MAX_TOKENS })
       return result.content
     } catch (err) {
       this.logger.error('NL 回答生成失败', err)
@@ -216,8 +163,6 @@ export class NlQueryService {
       return `AI 回答生成失败。查询到 ${count} 条数据，以下是原始结果：${JSON.stringify(data)}`
     }
   }
-
-  // ===== 辅助 =====
 
   private getTodayISO(): string {
     return new Date().toISOString().slice(0, 10)

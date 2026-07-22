@@ -1,19 +1,9 @@
-/**
- * AiAnalyzeService
- *
- * 职责：AI 通用问答分析。
- * 前端传入时间和事件范围 + 一个具体问题，本服务查 ClickHouse 获取
- * 数据概览和趋势，连同用户问题一起发给 GLM，返回 insight + suggestions。
- *
- * 不涉及日报生成或异常事件解释 —— 那是另外两个 Service 的职责。
- */
-
 import { Injectable, Logger } from '@nestjs/common'
 import { AiAnalyzeDto } from '../dto/ai-analyze.dto'
 import { AnalysisService } from '../../analysis/services/analysis.service'
 import { GlmClientService } from './glm-client.service'
 import { PromptService } from './prompt.service'
-import { parseAIJson, withGlmFallback } from './ai.utils'
+import { parseAIJson, withGlmFallback, SSEMessage } from './ai.utils'
 
 @Injectable()
 export class AiAnalyzeService {
@@ -25,50 +15,19 @@ export class AiAnalyzeService {
     private readonly promptService: PromptService,
   ) {}
 
+  // ===== 非流式 =====
+
   async analyze(query: AiAnalyzeDto) {
     const [summary, trend] = await Promise.all([
-      this.analysisService.getSummary({
-        appId: query.appId,
-        startTime: query.startTime,
-        endTime: query.endTime,
-      }),
-      this.analysisService.getTrend({
-        appId: query.appId,
-        startTime: query.startTime,
-        endTime: query.endTime,
-        interval: 'day',
-      }),
+      this.analysisService.getSummary({ appId: query.appId, startTime: query.startTime, endTime: query.endTime }),
+      this.analysisService.getTrend({ appId: query.appId, startTime: query.startTime, endTime: query.endTime, interval: 'day' }),
     ])
 
     if (!query.question) {
-      return {
-        insight: '请提供一个具体问题以获得 AI 分析。',
-        suggestions: [],
-        metrics: summary,
-        trend,
-      }
+      return { insight: '请提供一个具体问题以获得 AI 分析。', suggestions: [], metrics: summary, trend }
     }
 
-    const dataSummary = `
-当前数据概览：
-- PV（页面访问量）：${summary.pv}
-- UV（独立访客）：${summary.uv}
-- 事件种类数：${summary.eventCount}
-- 近期趋势（最近 ${trend.length} 个周期）：${JSON.stringify(trend.slice(-7))}
-    `.trim()
-
-    const systemPrompt = this.promptService.system('analyze')
-    const userPrompt = this.promptService.user('analyze', {
-      dataSummary,
-      question: query.question,
-    })
-
-    const fallback = {
-      insight: 'AI 分析暂时不可用，以下是原始数据供参考。',
-      suggestions: ['请检查 GLM_API_KEY 配置是否正确'],
-      metrics: summary,
-      trend,
-    }
+    const { systemPrompt, userPrompt } = this.buildPrompts(query.question, summary, trend)
 
     return await withGlmFallback(
       this.glmClient,
@@ -77,16 +36,52 @@ export class AiAnalyzeService {
       { temperature: 0.3, maxTokens: 1024 },
       content => {
         const parsed = parseAIJson<{ insight?: string; suggestions?: string[] }>(content, { insight: content, suggestions: [] })
-        return {
-          insight: parsed.insight || '',
-          suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
-          metrics: summary,
-          trend,
-        }
+        return { insight: parsed.insight || '', suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [], metrics: summary, trend }
       },
-      fallback,
+      { insight: 'AI 分析暂时不可用，以下是原始数据供参考。', suggestions: ['请检查 GLM_API_KEY 配置是否正确'], metrics: summary, trend },
       this.logger,
       'AI 分析',
     )
+  }
+
+  // ===== 流式 =====
+
+  async *analyzeStream(query: AiAnalyzeDto): AsyncGenerator<SSEMessage> {
+    const [summary, trend] = await Promise.all([
+      this.analysisService.getSummary({ appId: query.appId, startTime: query.startTime, endTime: query.endTime }),
+      this.analysisService.getTrend({ appId: query.appId, startTime: query.startTime, endTime: query.endTime, interval: 'day' }),
+    ])
+
+    yield { type: 'stats', stats: { metrics: summary, trend } }
+
+    if (!query.question) {
+      yield { type: 'text', content: '请提供一个具体问题以获得 AI 分析。' }
+      yield { type: 'done' }
+      return
+    }
+
+    const { systemPrompt, userPrompt } = this.buildPrompts(query.question, summary, trend)
+
+    try {
+      for await (const chunk of this.glmClient.chatStream(systemPrompt, userPrompt, { temperature: 0.3, maxTokens: 1024 })) {
+        yield { type: 'text', content: chunk }
+      }
+    } catch (err) {
+      this.logger.error('AI 分析流式生成失败', err)
+      yield { type: 'error', message: 'AI 分析暂时不可用，请稍后重试' }
+    }
+
+    yield { type: 'done' }
+  }
+
+  // ===== 公共 =====
+
+  private buildPrompts(question: string, summary: any, trend: any[]) {
+    const dataSummary = `当前数据概览：\n- PV：${summary.pv}\n- UV：${summary.uv}\n- 事件种类数：${summary.eventCount}\n- 近期趋势（最近 ${trend.length} 个周期）：${JSON.stringify(trend.slice(-7))}`
+
+    return {
+      systemPrompt: this.promptService.system('analyze'),
+      userPrompt: this.promptService.user('analyze', { dataSummary, question }),
+    }
   }
 }
