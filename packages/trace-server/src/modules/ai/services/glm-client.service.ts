@@ -130,7 +130,7 @@ export class GlmClientService {
       }
 
       // 解析成功响应
-      const data = await response.json();
+      const data = (await response.json()) as Record<string, any>;
       const content: string = data?.choices?.[0]?.message?.content || '';
 
       // 从 GLM 返回中提取 token 用量

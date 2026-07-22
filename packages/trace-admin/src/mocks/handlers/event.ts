@@ -1,4 +1,4 @@
-import { http, HttpResponse } from 'msw'
+import { http, HttpResponse, type PathParams } from 'msw'
 import { mockEvents } from '../data/mockData'
 
 export const eventHandlers = [
@@ -12,7 +12,7 @@ export const eventHandlers = [
       },
     })
   }),
-  http.get('/api/events/:id', ({ params }) => {
+  http.get('/api/events/:id', ({ params }: { params: PathParams }) => {
     const event = mockEvents.find((e) => e.id === params.id)
     if (event) {
       return HttpResponse.json({
@@ -30,23 +30,22 @@ export const eventHandlers = [
       { status: 404 },
     )
   }),
-  http.post('/api/events', ({ request }) => {
+  http.post('/api/events', () => {
     return HttpResponse.json({
       code: 200,
       message: 'success',
       data: {
         id: 'new-event-id',
-        ...request.json(),
       },
     })
   }),
-  http.put('/api/events/:id', ({ params, request }) => {
+  http.put('/api/events/:id', ({ params }: { params: PathParams }) => {
     const event = mockEvents.find((e) => e.id === params.id)
     if (event) {
       return HttpResponse.json({
         code: 200,
         message: 'success',
-        data: { ...event, ...request.json() },
+        data: { ...event },
       })
     }
     return HttpResponse.json(
@@ -58,7 +57,7 @@ export const eventHandlers = [
       { status: 404 },
     )
   }),
-  http.delete('/api/events/:id', ({ params }) => {
+  http.delete('/api/events/:id', ({ params }: { params: PathParams }) => {
     const event = mockEvents.find((e) => e.id === params.id)
     if (event) {
       return HttpResponse.json({

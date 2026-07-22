@@ -1,5 +1,16 @@
 import request from '@/utils/request'
-import type { AnalyticsOverview, EventTrend, TopEvent, EventTypeTrendItem } from '@/types'
+import type {
+  AnalyticsOverview,
+  AnalysisSummary,
+  EventTrend,
+  TopEvent,
+  EventTypeTrendItem,
+} from '@/types'
+
+/** 获取分析概览（首页 PV/UV/人均访问次数） */
+export const getSummary = (params: { startTime?: string; endTime?: string }) => {
+  return request.get<AnalysisSummary>('/analysis/summary', { params })
+}
 
 export const getOverview = (params: { startTime?: string; endTime?: string }) => {
   return request.get<AnalyticsOverview>('/analytics/overview', { params })

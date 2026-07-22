@@ -9,3 +9,5 @@ build/
 .env
 .env.local
 .DS_Store
+package-lock.json
+yarn.lock

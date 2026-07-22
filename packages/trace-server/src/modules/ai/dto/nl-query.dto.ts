@@ -1,9 +1,9 @@
-import { IsString, IsOptional, IsArray } from 'class-validator'
+import { IsString } from 'class-validator';
 
 export class NlQueryDto {
   @IsString()
-  appId: string
+  appId: string;
 
   @IsString()
-  question: string
+  question: string;
 }

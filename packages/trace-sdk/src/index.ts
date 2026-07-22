@@ -1,13 +1,7 @@
-// 主类
-export { Reporter } from './reporter/index';
+export { traceCore, TraceCore } from './core/TraceCore';
+export * from './types';
 
-// 核心类型
-export type { TrackEventData, TraceConfig, EnvInfo, CommonParams, ITraceCore } from './types';
-
-// 优先级类型
-export type { Priority } from './core/PriorityScheduler';
-
-// 版本号
+// 占位导出，后续由对应模块替换
 export const reporterVersion = '0.0.1';
 export const pluginVersion = '0.0.1';
 export const utilsVersion = '0.0.1';

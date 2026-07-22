@@ -9,9 +9,7 @@ describe('Reporter exports', () => {
       userAgent: 'Mozilla/5.0',
       sendBeacon: vi.fn().mockReturnValue(true),
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 })
-    ));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })));
     reporter = new Reporter();
   });
 
