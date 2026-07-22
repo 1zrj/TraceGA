@@ -23,6 +23,7 @@ describe('Track event processors', () => {
         password: 'plain-text',
         nested: { token: 'secret' },
       },
+      commonParams: { browser: ' Chrome ', authorization: 'Bearer secret' },
     })
 
     expect(result.eventName).toBe('page_view')
@@ -33,6 +34,7 @@ describe('Track event processors', () => {
       password: '[REDACTED]',
       nested: { token: '[REDACTED]' },
     })
+    expect(result.commonParams).toEqual({ browser: 'Chrome', authorization: '[REDACTED]' })
   })
 
   it('requires a url for page views', () => {

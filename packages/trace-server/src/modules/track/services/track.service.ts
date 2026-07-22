@@ -4,12 +4,14 @@ import { TrackEventDto } from '../dto/track-event.dto'
 import { TrackBatchDto } from '../dto/track-batch.dto'
 import { EventProcessorFactory } from '../processors/event.processor'
 import { TrackBatchResult, TrackEvent, TrackEventDefinition, TrackFailure, TrackResult } from '../entities/track.entity'
+import { JsonSchemaValidator } from '../validators/json-schema.validator'
 
 @Injectable()
 export class TrackService {
   constructor(
     private readonly trackRepository: TrackRepository,
     private readonly processorFactory: EventProcessorFactory,
+    private readonly jsonSchemaValidator: JsonSchemaValidator,
   ) {}
 
   async trackEvent(eventDto: TrackEventDto, ip: string, userAgent: string): Promise<TrackResult> {
@@ -17,10 +19,11 @@ export class TrackService {
       this.trackRepository.findExistingProjects([eventDto.appId]),
       this.trackRepository.findActiveEventDefinitions([eventDto.appId], [eventDto.eventName]),
     ])
-    this.validateBusinessRules(eventDto, projects, definitions)
+    const definition = this.validateBusinessRules(eventDto, projects, definitions)
 
     const processor = this.processorFactory.getProcessor(eventDto.eventType)
     const processedEvent = processor.process(eventDto)
+    this.jsonSchemaValidator.validate(processedEvent.properties ?? {}, definition.propertySchema)
     await this.trackRepository.insertEvent(processedEvent, ip, userAgent)
     return { eventId: eventDto.eventId ?? null, received: true }
   }
@@ -49,9 +52,11 @@ export class TrackService {
       }
 
       try {
-        this.validateBusinessRules(event, projects, definitions)
+        const definition = this.validateBusinessRules(event, projects, definitions)
         const processor = this.processorFactory.getProcessor(event.eventType)
-        processedEvents.push(processor.process(event))
+        const processedEvent = processor.process(event)
+        this.jsonSchemaValidator.validate(processedEvent.properties ?? {}, definition.propertySchema)
+        processedEvents.push(processedEvent)
       } catch (error) {
         failures.push({
           index,
@@ -70,7 +75,7 @@ export class TrackService {
     }
   }
 
-  private validateBusinessRules(event: TrackEventDto, projects: Set<string>, definitions: TrackEventDefinition[]): void {
+  private validateBusinessRules(event: TrackEventDto, projects: Set<string>, definitions: TrackEventDefinition[]): TrackEventDefinition {
     if (!projects.has(event.appId)) {
       throw new NotFoundException('appId does not exist')
     }
@@ -83,6 +88,8 @@ export class TrackService {
     if (definition.eventType && definition.eventType !== event.eventType) {
       throw new BadRequestException('eventType does not match the event definition')
     }
+
+    return definition
   }
 
   private getFailureReason(error: unknown): string {

@@ -4,8 +4,10 @@ export interface TrackEvent {
   eventName: string
   appId: string
   userId?: string
+  anonymousId?: string
   sessionId?: string
   properties?: Record<string, any>
+  commonParams?: Record<string, any>
   timestamp?: number
   url?: string
   referrer?: string
@@ -17,6 +19,7 @@ export interface TrackEventDefinition {
   appId: string
   eventName: string
   eventType: string
+  propertySchema?: Record<string, any> | null
 }
 
 export interface TrackFailure {

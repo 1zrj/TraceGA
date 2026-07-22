@@ -35,12 +35,22 @@ export class TrackEventDto {
 
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  anonymousId?: string
+
+  @IsOptional()
+  @IsString()
   @MaxLength(128)
   sessionId?: string
 
   @IsOptional()
   @IsObject()
   properties?: Record<string, any>
+
+  @IsOptional()
+  @IsObject()
+  commonParams?: Record<string, any>
 
   @IsOptional()
   @IsInt()

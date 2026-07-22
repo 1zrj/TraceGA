@@ -27,11 +27,14 @@ describe('TrackRepository', () => {
         project_id: 'app_001',
         event_name: 'page_view',
         event_type: 'page_view',
+        param_schema: { type: 'object' },
       },
     ])
 
     await expect(repository.findExistingProjects(['app_001', 'app_001'])).resolves.toEqual(new Set(['app_001']))
-    await expect(repository.findActiveEventDefinitions(['app_001'], ['page_view'])).resolves.toEqual([{ appId: 'app_001', eventName: 'page_view', eventType: 'page_view' }])
+    await expect(repository.findActiveEventDefinitions(['app_001'], ['page_view'])).resolves.toEqual([
+      { appId: 'app_001', eventName: 'page_view', eventType: 'page_view', propertySchema: { type: 'object' } },
+    ])
   })
 
   it('maps one event to event_log fields', async () => {
@@ -41,8 +44,10 @@ describe('TrackRepository', () => {
         eventName: 'page_view',
         appId: 'app_001',
         userId: 'user_001',
+        anonymousId: 'anonymous_001',
         sessionId: 'session_001',
         properties: { title: 'Home' },
+        commonParams: { browser: 'Chrome' },
         timestamp: 1784390000000,
         url: 'https://example.com',
         referrer: 'https://search.example.com',
@@ -60,7 +65,7 @@ describe('TrackRepository', () => {
         session_id: 'session_001',
         page_url: 'https://example.com',
         event_params: { title: 'Home' },
-        common_params: { referrer: 'https://search.example.com' },
+        common_params: { browser: 'Chrome', anonymousId: 'anonymous_001', referrer: 'https://search.example.com' },
         ip: '127.0.0.1',
         user_agent: 'jest',
       }),
