@@ -1,18 +1,20 @@
-import { Controller, Post, Body } from '@nestjs/common'
+import { Controller, Post, Body, UnauthorizedException } from '@nestjs/common';
+import { AuthService } from '../services/auth.service';
 
 @Controller('api/auth')
 export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
   @Post('login')
-  login(@Body() _body: { username: string; password: string }) {
-    // 临时 stub：Mock 登录，后续接入真实认证
-    return {
-      token: 'mock-token-stub',
-      user: { id: '1', username: 'admin', role: 'admin' },
+  async login(@Body() body: { username: string; password: string }) {
+    if (!body.username || !body.password) {
+      throw new UnauthorizedException('用户名和密码不能为空');
     }
+    return this.authService.login(body.username, body.password);
   }
 
   @Post('logout')
   logout() {
-    return null
+    return null;
   }
 }

@@ -22,9 +22,11 @@
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.8",
+    "node-gyp-build": "^4.8.4",
     "prettier": "^3.9.1"
   },
   "dependencies": {
+    "jsonwebtoken": "^9.0.3",
     "lodash.upperfirst": "^4.3.1",
     "react-draggable": "^4.4.6",
     "react-grid-layout": "2.2.3",

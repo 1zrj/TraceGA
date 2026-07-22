@@ -10,3 +10,4 @@ allowBuilds:
   msw: true
   prisma: true
   sqlite3: false
+  bcrypt: true

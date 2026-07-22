@@ -2,18 +2,12 @@
 // variant 驱动：侧边栏宽度 / Header 高度 / 内容区 padding / 面包屑 / 水印 / 页脚
 
 import React, { useState, useMemo } from 'react'
-import {
-  Layout,
-  Menu,
-  Breadcrumb,
-  Avatar,
-  Dropdown,
-  Badge,
-  Switch,
-  Space,
-  Typography,
-} from 'antd'
-type MenuClickHandler = (info: { key: string; keyPath: string[]; domEvent: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement> }) => void
+import { Layout, Menu, Breadcrumb, Avatar, Dropdown, Badge, Switch, Space, Typography } from 'antd'
+type MenuClickHandler = (info: {
+  key: string
+  keyPath: string[]
+  domEvent: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>
+}) => void
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -113,8 +107,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 }) => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { sidebarCollapsed, toggleSidebar, userInfo, setUserInfo } =
-    useAppStore()
+  const { sidebarCollapsed, toggleSidebar, userInfo, logout } = useAppStore()
   const [darkMode, setDarkMode] = useState(false)
 
   const preset = LAYOUT_PRESETS[variant]
@@ -175,8 +168,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         navigate('/settings/account')
         break
       case 'logout':
-        setUserInfo(null)
-        localStorage.removeItem('token')
+        logout()
         navigate('/login')
         break
     }
@@ -191,11 +183,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   // 渲染
   // ═══════════════════════════════════════════════════════════
   return (
-    <div
-      data-theme={variant}
-      className={cn('layout', cnVar(variant))}
-      style={{ height: '100vh' }}
-    >
+    <div data-theme={variant} className={cn('layout', cnVar(variant))} style={{ height: '100vh' }}>
       <Layout style={{ height: '100%' }}>
         {/* ════ 侧边栏 ═══════════════════════════════════════ */}
         <Sider
@@ -206,16 +194,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           collapsedWidth={preset.collapsedWidth}
           theme={darkMode ? 'dark' : preset.navTheme}
           style={{
-            background:
-              preset.navTheme === 'dark'
-                ? '#001529'
-                : darkMode
-                  ? '#001529'
-                  : '#fafbfc',
+            background: preset.navTheme === 'dark' ? '#001529' : darkMode ? '#001529' : '#fafbfc',
             borderRight:
-              preset.navTheme === 'light'
-                ? '1px solid var(--tk-color-border, #d9d9d9)'
-                : undefined,
+              preset.navTheme === 'light' ? '1px solid var(--tk-color-border, #d9d9d9)' : undefined,
           }}
         >
           {/* Logo / 标题区 */}
@@ -229,8 +210,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 preset.navTheme === 'dark'
                   ? '1px solid rgba(255,255,255,0.1)'
                   : '1px solid var(--tk-color-border, #d9d9d9)',
-              color:
-                preset.navTheme === 'dark' ? '#fff' : 'var(--tk-color-text)',
+              color: preset.navTheme === 'dark' ? '#fff' : 'var(--tk-color-text)',
               fontSize: sidebarCollapsed ? 14 : 18,
               fontWeight: 600,
               whiteSpace: 'nowrap',
@@ -354,9 +334,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               />
 
               {/* 用户下拉菜单 */}
-              <Dropdown
-                menu={{ items: userMenuItems, onClick: onUserMenuClick }}
-              >
+              <Dropdown menu={{ items: userMenuItems, onClick: onUserMenuClick }}>
                 <Space
                   style={{
                     cursor: 'pointer',
@@ -401,9 +379,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             style={{
               margin: preset.contentPadding,
               padding: preset.contentPadding,
-              background: darkMode
-                ? '#141414'
-                : 'var(--tk-color-bg-layout, #f1f5f9)',
+              background: darkMode ? '#141414' : 'var(--tk-color-bg-layout, #f1f5f9)',
               borderRadius: 'var(--tk-radius-lg, 8px)',
               overflow: 'auto',
               flex: 1,
