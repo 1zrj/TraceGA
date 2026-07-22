@@ -4,8 +4,8 @@ import { mockEvents } from '../data/mockData'
 export const eventHandlers = [
   http.get('/api/events', () => {
     return HttpResponse.json({
-      code: 0,
-      msg: 'success',
+      code: 200,
+      message: 'success',
       data: {
         list: mockEvents,
         total: mockEvents.length,
@@ -16,15 +16,15 @@ export const eventHandlers = [
     const event = mockEvents.find((e) => e.id === params.id)
     if (event) {
       return HttpResponse.json({
-        code: 0,
-        msg: 'success',
+        code: 200,
+        message: 'success',
         data: event,
       })
     }
     return HttpResponse.json(
       {
         code: 404,
-        msg: 'Event not found',
+        message: 'Event not found',
         data: null,
       },
       { status: 404 },
@@ -32,8 +32,8 @@ export const eventHandlers = [
   }),
   http.post('/api/events', () => {
     return HttpResponse.json({
-      code: 0,
-      msg: 'success',
+      code: 200,
+      message: 'success',
       data: {
         id: 'new-event-id',
       },
@@ -43,15 +43,15 @@ export const eventHandlers = [
     const event = mockEvents.find((e) => e.id === params.id)
     if (event) {
       return HttpResponse.json({
-        code: 0,
-        msg: 'success',
+        code: 200,
+        message: 'success',
         data: { ...event },
       })
     }
     return HttpResponse.json(
       {
         code: 404,
-        msg: 'Event not found',
+        message: 'Event not found',
         data: null,
       },
       { status: 404 },
@@ -61,15 +61,15 @@ export const eventHandlers = [
     const event = mockEvents.find((e) => e.id === params.id)
     if (event) {
       return HttpResponse.json({
-        code: 0,
-        msg: 'success',
+        code: 200,
+        message: 'success',
         data: null,
       })
     }
     return HttpResponse.json(
       {
         code: 404,
-        msg: 'Event not found',
+        message: 'Event not found',
         data: null,
       },
       { status: 404 },
