@@ -58,3 +58,81 @@
 .dashboard-edit-mode .react-grid-item > .react-resizable-handle:hover {
   opacity: 1;
 }
+
+/* 错误事件卡片样式 */
+.error-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.error-event-item {
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  transition: box-shadow 0.2s;
+}
+
+.error-event-item:hover {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.error-event-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.error-event-type {
+  font-size: 12px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.error-event-duration {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+.error-event-message {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.5;
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error-event-name {
+  font-weight: 600;
+  color: #ef4444;
+}
+
+.error-event-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.error-event-time {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.error-event-url {
+  color: #c0c8d4;
+}
+
+.error-event-actions {
+  display: flex;
+  gap: 4px;
+}
