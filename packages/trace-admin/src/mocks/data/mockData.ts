@@ -102,3 +102,68 @@ export const mockEventTypeTrend = [
   { time: '01-15', type: '添加购物车', count: 370 },
   { time: '01-15', type: '订单完成', count: 260 },
 ]
+
+/** 模拟错误事件趋势（各日所有错误类型的合计） */
+export const mockErrorTrend = [
+  { time: '01-09', count: 12 },
+  { time: '01-10', count: 8 },
+  { time: '01-11', count: 15 },
+  { time: '01-12', count: 10 },
+  { time: '01-13', count: 18 },
+  { time: '01-14', count: 14 },
+  { time: '01-15', count: 22 },
+]
+
+/** 模拟错误事件（对应 trace-sdk ErrorPayloadBase 字段） */
+export const mockErrorEvents = [
+  {
+    id: 'err-001',
+    type: 'js-error',
+    message: 'Uncaught TypeError: Cannot read properties of undefined',
+    errorName: 'TypeError',
+    occurredAt: '2024-01-15 14:23:10',
+    duration: 3200,
+    url: '/dashboard',
+    status: 'active' as const,
+  },
+  {
+    id: 'err-002',
+    type: 'promise-error',
+    message: 'Unhandled Promise Rejection: Network request failed',
+    errorName: 'NetworkError',
+    occurredAt: '2024-01-15 13:45:22',
+    duration: 1500,
+    url: '/api/analytics/overview',
+    status: 'active' as const,
+  },
+  {
+    id: 'err-003',
+    type: 'resource-error',
+    message: 'Failed to load resource: /static/js/chunk-3a2b.js',
+    errorName: 'ResourceLoadError',
+    occurredAt: '2024-01-15 12:10:05',
+    duration: 800,
+    url: '/static/js/chunk-3a2b.js',
+    status: 'active' as const,
+  },
+  {
+    id: 'err-004',
+    type: 'http-error',
+    message: 'HTTP 500 Internal Server Error at /api/analytics/event-trend',
+    errorName: 'HttpServerError',
+    occurredAt: '2024-01-15 11:30:45',
+    duration: 2100,
+    url: '/api/analytics/event-trend',
+    status: 'ignored' as const,
+  },
+  {
+    id: 'err-005',
+    type: 'js-error',
+    message: 'ReferenceError: $ is not defined',
+    errorName: 'ReferenceError',
+    occurredAt: '2024-01-15 10:05:18',
+    duration: 500,
+    url: '/events',
+    status: 'resolved' as const,
+  },
+]
