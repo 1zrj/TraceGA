@@ -289,6 +289,13 @@ export const Dashboard: React.FC = () => {
     tooltip: {
       trigger: 'axis' as const,
     },
+    legend: {
+      top: 0,
+      icon: 'roundRect',
+      itemWidth: 14,
+      itemHeight: 4,
+      selected: { 错误事件数: false },
+    },
     xAxis: {
       type: 'category' as const,
       data: eventTrend.map((item) => item.time),
@@ -303,6 +310,14 @@ export const Dashboard: React.FC = () => {
         data: eventTrend.map((item) => item.count),
         itemStyle: {
           color: '#3b82f6',
+        },
+      },
+      {
+        name: '错误事件数',
+        type: 'bar' as const,
+        data: errorTrend.map((item) => item.count),
+        itemStyle: {
+          color: '#ef4444',
         },
       },
     ],
