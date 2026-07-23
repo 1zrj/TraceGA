@@ -6,7 +6,14 @@ import { Responsive, WidthProvider } from 'react-grid-layout/legacy'
 import type { Layout, ResponsiveLayouts } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
-import { getOverview, getEventTrend, getTopEvents, getEventTypeTrend, getErrorEvents } from '@/api'
+import {
+  getOverview,
+  getEventTrend,
+  getTopEvents,
+  getEventTypeTrend,
+  getErrorEvents,
+  getErrorTrend,
+} from '@/api'
 import type {
   AnalyticsOverview,
   EventTrend,
@@ -61,6 +68,7 @@ export const Dashboard: React.FC = () => {
   const [topEvents, setTopEvents] = useState<TopEvent[]>([])
   const [eventTypeTrend, setEventTypeTrend] = useState<EventTypeTrendItem[]>([])
   const [errorEvents, setErrorEvents] = useState<ErrorEventItem[]>([])
+  const [errorTrend, setErrorTrend] = useState<EventTrend[]>([])
   const [loading, setLoading] = useState(true)
   const [errorLoading, setErrorLoading] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
@@ -96,12 +104,13 @@ export const Dashboard: React.FC = () => {
   const fetchErrorEvents = useCallback(async () => {
     setErrorLoading(true)
     try {
-      const res = await getErrorEvents({})
-      setErrorEvents(res)
+      const [eventsRes, trendRes] = await Promise.all([getErrorEvents({}), getErrorTrend({})])
+      setErrorEvents(eventsRes)
+      setErrorTrend(trendRes)
     } catch (error) {
       console.error('Failed to fetch error events:', error)
-      // 加载失败时自动显示占位空列表
       setErrorEvents([])
+      setErrorTrend([])
     } finally {
       setErrorLoading(false)
     }
@@ -191,7 +200,7 @@ export const Dashboard: React.FC = () => {
     }
   }, [topEvents])
 
-  // 事件类型趋势折线图：将 EventTypeTrendItem[] 按 type 分组为多系列平滑折线
+  // 事件类型趋势折线图：将 EventTypeTrendItem[] 按 type 分组为多系列平滑折线，叠加错误事件总和曲线
   const typeTrendOption = useMemo(() => {
     const times = [...new Set(eventTypeTrend.map((d) => d.time))]
     const types = [...new Set(eventTypeTrend.map((d) => d.type))]
@@ -217,6 +226,29 @@ export const Dashboard: React.FC = () => {
         return item?.count ?? 0
       }),
     }))
+
+    // 追加错误事件总和曲线（使用虚线 + 菱形标记以明显区分）
+    const errorTrendData = times.map((t) => {
+      const item = errorTrend.find((d) => d.time === t)
+      return item?.count ?? 0
+    })
+    series.push({
+      name: '错误事件总和',
+      type: 'line' as const,
+      smooth: true,
+      symbol: 'diamond',
+      symbolSize: 10,
+      emphasis: { focus: 'series' as const },
+      itemStyle: { color: '#ff0000ff' },
+      lineStyle: { width: 3 },
+      label: {
+        show: true,
+        position: 'top' as const,
+        fontSize: 11,
+        color: '#ff6b6b',
+      },
+      data: errorTrendData,
+    })
     return {
       tooltip: {
         trigger: 'axis' as const,
@@ -243,7 +275,7 @@ export const Dashboard: React.FC = () => {
       },
       series,
     }
-  }, [eventTypeTrend])
+  }, [eventTypeTrend, errorTrend])
 
   if (loading) {
     return (

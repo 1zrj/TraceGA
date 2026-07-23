@@ -5,6 +5,7 @@ import {
   mockTopEvents,
   mockEventTypeTrend,
   mockErrorEvents,
+  mockErrorTrend,
 } from '../data/mockData'
 
 export const analyticsHandlers = [
@@ -48,6 +49,13 @@ export const analyticsHandlers = [
       code: 200,
       message: 'success',
       data: mockErrorEvents,
+    })
+  }),
+  http.get('/api/analytics/error-trend', () => {
+    return HttpResponse.json({
+      code: 200,
+      message: 'success',
+      data: mockErrorTrend,
     })
   }),
 ]

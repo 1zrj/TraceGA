@@ -36,3 +36,8 @@ export const getEventTypeTrend = (params: { startTime?: string; endTime?: string
 export const getErrorEvents = (params?: { startTime?: string; endTime?: string }) => {
   return request.get<ErrorEventItem[]>('/analytics/error-events', { params })
 }
+
+/** 获取错误事件按日聚合趋势 */
+export const getErrorTrend = (params?: { startTime?: string; endTime?: string }) => {
+  return request.get<EventTrend[]>('/analytics/error-trend', { params })
+}

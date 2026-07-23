@@ -103,6 +103,17 @@ export const mockEventTypeTrend = [
   { time: '01-15', type: '订单完成', count: 260 },
 ]
 
+/** 模拟错误事件趋势（各日所有错误类型的合计） */
+export const mockErrorTrend = [
+  { time: '01-09', count: 12 },
+  { time: '01-10', count: 8 },
+  { time: '01-11', count: 15 },
+  { time: '01-12', count: 10 },
+  { time: '01-13', count: 18 },
+  { time: '01-14', count: 14 },
+  { time: '01-15', count: 22 },
+]
+
 /** 模拟错误事件（对应 trace-sdk ErrorPayloadBase 字段） */
 export const mockErrorEvents = [
   {
