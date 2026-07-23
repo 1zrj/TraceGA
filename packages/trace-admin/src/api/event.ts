@@ -10,8 +10,11 @@ export const getEvents = (params: {
   page?: number
   pageSize?: number
   keyword?: string
+  eventType?: string
   startTime?: string
   endTime?: string
+  sortField?: string
+  sortOrder?: string
 }) => {
   return request.get<GetEventsResponse>('/events', { params })
 }

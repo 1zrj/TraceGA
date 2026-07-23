@@ -12,8 +12,6 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
-    "@types/react-grid-layout": "^2.1.0",
-    "@types/react-resizable": "^4.0.0",
     "antd": "^5.12.0",
     "axios": "^1.6.0",
     "dayjs": "^1.11.21",
@@ -29,6 +27,8 @@
   "devDependencies": {
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/react-grid-layout": "^2.1.0",
+    "@types/react-resizable": "^4.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "@vitejs/plugin-react": "^4.2.0",
