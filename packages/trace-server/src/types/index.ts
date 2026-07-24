@@ -1,14 +1,14 @@
 export interface ApiResponse<T = null> {
-  code: number;
-  data: T;
-  msg: string;
+  code: number
+  data: T
+  msg: string
 }
 
 export interface PagedResponse<T> {
-  list: T[];
-  total: number;
-  page: number;
-  pageSize: number;
+  list: T[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 export enum ErrorCode {
@@ -25,120 +25,127 @@ export enum ErrorCode {
   ANALYSIS_QUERY_ERROR = 30001,
   ALARM_RULE_NOT_FOUND = 40001,
   AI_SERVICE_ERROR = 50001,
+
+  // Auth 模块错误码
+  USER_NOT_FOUND = 60001,
+  USERNAME_EXISTS = 60002,
+  INVALID_PASSWORD = 60003,
+  TOKEN_EXPIRED = 60004,
+  TOKEN_INVALID = 60005,
 }
 
-export type AlarmLevel = 'low' | 'medium' | 'high' | 'critical';
+export type AlarmLevel = 'low' | 'medium' | 'high' | 'critical'
 
-export type AlarmStatus = 'pending' | 'resolved' | 'acknowledged';
+export type AlarmStatus = 'pending' | 'resolved' | 'acknowledged'
 
-export type TrendInterval = 'hour' | 'day' | 'week';
+export type TrendInterval = 'hour' | 'day' | 'week'
 
 export interface EventEntity {
-  id: string;
-  eventName: string;
-  eventType: string;
-  category: string;
-  description?: string;
-  propertySchema?: Record<string, unknown>;
-  appId: string;
-  isDeleted: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt?: Date;
+  id: string
+  eventName: string
+  eventType: string
+  category: string
+  description?: string
+  propertySchema?: Record<string, unknown>
+  appId: string
+  isDeleted: boolean
+  createdAt: Date
+  updatedAt: Date
+  deletedAt?: Date
 }
 
 export interface AlarmEntity {
-  id: string;
-  alarmType: string;
-  level: AlarmLevel;
-  message: string;
-  data?: Record<string, unknown>;
-  status: AlarmStatus;
-  createdAt: Date;
-  updatedAt: Date;
+  id: string
+  alarmType: string
+  level: AlarmLevel
+  message: string
+  data?: Record<string, unknown>
+  status: AlarmStatus
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface TraceEventEntity {
-  eventId: string;
-  eventType: string;
-  appId: string;
-  userId?: string;
-  sessionId?: string;
-  properties?: Record<string, unknown>;
-  timestamp: Date;
-  ip?: string;
-  userAgent?: string;
-  source?: string;
+  eventId: string
+  eventType: string
+  appId: string
+  userId?: string
+  sessionId?: string
+  properties?: Record<string, unknown>
+  timestamp: Date
+  ip?: string
+  userAgent?: string
+  source?: string
 }
 
 export interface TrackEventDto {
-  eventType: string;
-  appId: string;
-  userId?: string;
-  sessionId?: string;
-  properties?: Record<string, unknown>;
-  timestamp?: number;
-  ip?: string;
-  userAgent?: string;
-  source?: string;
+  eventType: string
+  appId: string
+  userId?: string
+  sessionId?: string
+  properties?: Record<string, unknown>
+  timestamp?: number
+  ip?: string
+  userAgent?: string
+  source?: string
 }
 
 export interface CreateEventDto {
-  eventName: string;
-  eventType: string;
-  category: string;
-  description?: string;
-  propertySchema?: Record<string, unknown>;
-  appId: string;
+  eventName: string
+  eventType: string
+  category: string
+  description?: string
+  propertySchema?: Record<string, unknown>
+  appId: string
 }
 
 export interface UpdateEventDto {
-  eventName?: string;
-  description?: string;
-  propertySchema?: Record<string, unknown>;
+  eventName?: string
+  description?: string
+  propertySchema?: Record<string, unknown>
 }
 
 export interface EventQueryDto {
-  page?: number;
-  pageSize?: number;
-  eventType?: string;
-  appId?: string;
-  keyword?: string;
+  page?: number
+  pageSize?: number
+  eventType?: string
+  appId?: string
+  keyword?: string
 }
 
 export interface AnalyticsSummary {
-  pv: number;
-  uv: number;
-  rate: string;
-  startTime: string;
-  endTime: string;
+  pv: number
+  uv: number
+  rate: string
+  startTime: string
+  endTime: string
 }
 
 export interface TrendData {
-  time: string;
-  pv: number;
-  uv: number;
+  time: string
+  pv: number
+  uv: number
 }
 
 export interface AiAnalysisResult {
-  conclusion: string;
-  suggestions: string[];
-  data: Record<string, unknown>;
+  conclusion: string
+  suggestions: string[]
+  data: Record<string, unknown>
 }
 
 export interface AlarmItem {
-  id: string;
-  alarmType: string;
-  level: AlarmLevel;
-  message: string;
-  data: Record<string, unknown>;
-  status: AlarmStatus;
-  createdAt: string;
-  updatedAt: string;
+  id: string
+  alarmType: string
+  level: AlarmLevel
+  message: string
+  data: Record<string, unknown>
+  status: AlarmStatus
+  createdAt: string
+  updatedAt: string
 }
 
 export interface UserInfo {
-  id: string;
-  username: string;
-  role: string;
+  id: string
+  username: string
+  role: string
 }
