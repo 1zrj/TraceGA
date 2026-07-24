@@ -2,6 +2,10 @@ import commonjs from '@rollup/plugin-commonjs';
 import resolve from '@rollup/plugin-node-resolve';
 import typescript from '@rollup/plugin-typescript';
 import esbuild from 'rollup-plugin-esbuild';
+import { rmSync } from 'fs';
+import { readFileSync } from 'fs';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
 
 const entries = {
   index: 'src/index.ts',
@@ -9,6 +13,7 @@ const entries = {
   behavior: 'src/plugins/behavior/index.ts',
   error: 'src/plugins/error/index.ts',
   utils: 'src/utils/index.ts',
+  performance: 'src/plugins/performance/index.ts',
 };
 
 const umdEntries = [
@@ -17,7 +22,21 @@ const umdEntries = [
   ['behavior', entries.behavior, 'TraceGABehavior'],
   ['error', entries.error, 'TraceGAError'],
   ['utils', entries.utils, 'TraceGAUtils'],
+  ['performance', entries.performance, 'TraceGAPerformance'],
 ];
+
+function clean() {
+  return {
+    name: 'clean',
+    buildStart() {
+      try {
+        rmSync('dist', { recursive: true, force: true });
+      } catch {
+        // dist may not exist on first build
+      }
+    },
+  };
+}
 
 function runtimePlugins() {
   return [
@@ -50,6 +69,7 @@ const moduleBuild = {
     },
   ],
   plugins: [
+    clean(),
     resolve(),
     commonjs(),
     typescript({
@@ -60,6 +80,9 @@ const moduleBuild = {
     esbuild({
       minify: false,
       target: 'es2018',
+      define: {
+        __SDK_VERSION__: JSON.stringify(pkg.version),
+      },
     }),
   ],
 };

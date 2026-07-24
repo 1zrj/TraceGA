@@ -25,11 +25,15 @@ export interface EventPluginConfig {
 
 export interface PerformancePluginConfig {
   webVitals?: boolean;
+  /** @deprecated Resource timing tracking is not yet implemented. This option has no effect. */
   resource?: boolean;
 }
 
 export interface TraceConfig {
-  projectId: string;
+  /** Primary project identifier. At least one of projectId or appId is required. */
+  projectId?: string;
+  /** @deprecated Use projectId instead. Supported for backward compatibility. */
+  appId?: string;
   reportUrl: string;
   sampleRate?: number;
   maxBufferSize?: number;

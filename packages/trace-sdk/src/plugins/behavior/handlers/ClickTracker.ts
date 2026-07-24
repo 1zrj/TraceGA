@@ -54,7 +54,7 @@ export class ClickTracker {
         return;
       }
 
-      const metadata = getElementMetadata(matched.element);
+      const metadata = getElementMetadata(matched.element, { collectElementId: false });
 
       const payload: ClickBehaviorPayload = {
         type: 'click',
