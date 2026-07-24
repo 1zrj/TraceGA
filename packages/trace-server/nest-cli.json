@@ -6,9 +6,8 @@
     "deleteOutDir": false,
     "assets": [
       {
-        "include": "**/prompts/*.txt",
-        "outDir": "dist",
-        "watchAssets": true
+        "include": "modules/ai/prompts/**/*.txt",
+        "outDir": "dist"
       }
     ]
   }

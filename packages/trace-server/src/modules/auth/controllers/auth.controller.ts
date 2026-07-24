@@ -1,20 +1,39 @@
-import { Controller, Post, Body, UnauthorizedException } from '@nestjs/common';
-import { AuthService } from '../services/auth.service';
+import { Controller, Post, Get, Body, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common'
+import { Request } from 'express'
+import { AuthService } from '../services/auth.service'
+import { RegisterDto } from '../dto/register.dto'
+import { LoginDto } from '../dto/login.dto'
+import { AuthGuard } from '@/common/guards/auth.guard'
 
 @Controller('api/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Post('register')
+  @HttpCode(HttpStatus.OK)
+  register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto)
+  }
+
   @Post('login')
-  async login(@Body() body: { username: string; password: string }) {
-    if (!body.username || !body.password) {
-      throw new UnauthorizedException('用户名和密码不能为空');
-    }
-    return this.authService.login(body.username, body.password);
+  @HttpCode(HttpStatus.OK)
+  login(@Body() dto: LoginDto) {
+    return this.authService.login(dto)
   }
 
   @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
   logout() {
-    return null;
+    // JWT 是无状态的，logout 只需返回成功
+    // 前端清除 localStorage 中的 token 即可
+    return { message: '已退出登录' }
+  }
+
+  @Get('profile')
+  @UseGuards(AuthGuard)
+  getProfile(@Req() req: Request) {
+    const userId = (req as any).user.sub
+    return this.authService.getProfile(userId)
   }
 }
