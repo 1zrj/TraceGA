@@ -1,6 +1,6 @@
 {
   "name": "@tracega/sdk",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "TraceGA 全链路埋点监控 SDK",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -33,6 +33,11 @@
       "import": "./dist/utils.mjs",
       "require": "./dist/utils.cjs"
     },
+    "./performance": {
+      "types": "./dist/plugins/performance/index.d.ts",
+      "import": "./dist/performance.mjs",
+      "require": "./dist/performance.cjs"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,
@@ -42,7 +47,8 @@
   "scripts": {
     "dev": "rollup -c -w",
     "build": "rollup -c",
-    "prepack": "pnpm build",
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "prepack": "pnpm clean && pnpm build && pnpm test",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

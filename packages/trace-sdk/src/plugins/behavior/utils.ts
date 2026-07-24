@@ -11,6 +11,11 @@ export interface ElementMetadata {
   inputType?: string;
 }
 
+export interface ElementMetadataOptions {
+  /** Collect the DOM element id attribute. Defaults to false for privacy. */
+  collectElementId?: boolean;
+}
+
 export interface MatchedElement {
   element: Element;
   selector: string;
@@ -200,13 +205,30 @@ export function findMatchedElement(event: Event, selectors: readonly string[]): 
 
 export function isIgnoredElement(element: Element): boolean {
   try {
-    return element.closest(IGNORE_SELECTOR) !== null;
+    // Walk up through DOM and Shadow DOM boundaries
+    let current: Element | null = element;
+    while (current) {
+      if (current.matches?.(IGNORE_SELECTOR)) {
+        return true;
+      }
+      // Cross Shadow DOM boundary if applicable
+      const root = current.getRootNode?.();
+      current = current.parentElement || (root instanceof ShadowRoot ? root.host : null);
+    }
+    return false;
   } catch {
     return false;
   }
 }
 
-export function getElementMetadata(element: Element): ElementMetadata {
+/** Patterns that suggest an element ID contains sensitive data */
+const SENSITIVE_ID_PATTERN = /@|password|token|secret|key|auth|credential|ssn|credit|email|phone|mobile|account/i;
+
+function isSensitiveElementId(id: string): boolean {
+  return SENSITIVE_ID_PATTERN.test(id);
+}
+
+export function getElementMetadata(element: Element, options: ElementMetadataOptions = {}): ElementMetadata {
   let tagName = 'unknown';
 
   try {
@@ -215,10 +237,18 @@ export function getElementMetadata(element: Element): ElementMetadata {
     // Keep the safe fallback.
   }
 
+  let elementId: string | undefined;
+  if (options.collectElementId) {
+    const rawId = safeGetAttribute(element, 'id');
+    if (rawId && !isSensitiveElementId(rawId)) {
+      elementId = rawId;
+    }
+  }
+
   return {
     tagName,
     traceId: safeGetAttribute(element, 'data-trace-id'),
-    elementId: safeGetAttribute(element, 'id'),
+    elementId,
     role: safeGetAttribute(element, 'role'),
     inputType: safeGetAttribute(element, 'type'),
   };

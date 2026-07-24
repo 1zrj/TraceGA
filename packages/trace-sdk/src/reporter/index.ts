@@ -61,6 +61,10 @@ export class Reporter {
     }
 
     this.config = { ...DEFAULT_CONFIG, ...config };
+    // Normalize projectId: support both projectId and appId (backward compat)
+    if (!this.config.projectId && (config as any).appId) {
+      this.config.projectId = (config as any).appId;
+    }
     this.commonParams = {};
     this.envInfo = this.collectEnvInfo();
 
