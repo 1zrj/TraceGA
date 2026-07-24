@@ -1,36 +1,70 @@
-import { IsString, IsOptional, IsObject, IsNumber } from 'class-validator'
+import { IsIn, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+
+export const TRACK_EVENT_TYPES = ['custom', 'click', 'page_view', 'exposure', 'error', 'performance', 'white_screen'] as const;
 
 export class TrackEventDto {
+  @IsOptional()
   @IsString()
-  eventType: string
+  @IsNotEmpty()
+  @MaxLength(128)
+  eventId?: string;
 
   @IsString()
-  eventName: string
+  @IsNotEmpty()
+  @MaxLength(64)
+  @IsIn(TRACK_EVENT_TYPES)
+  eventType: string;
 
   @IsString()
-  appId: string
+  @IsNotEmpty()
+  @MaxLength(128)
+  @Matches(/^[a-z][a-z0-9_]*$/, {
+    message: 'eventName must use snake_case',
+  })
+  eventName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  appId: string;
 
   @IsOptional()
   @IsString()
-  userId?: string
+  @MaxLength(128)
+  userId?: string;
 
   @IsOptional()
   @IsString()
-  sessionId?: string
+  @IsNotEmpty()
+  @MaxLength(128)
+  anonymousId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  sessionId?: string;
 
   @IsOptional()
   @IsObject()
-  properties?: Record<string, any>
+  properties?: Record<string, any>;
 
   @IsOptional()
-  @IsNumber()
-  timestamp?: number
+  @IsObject()
+  commonParams?: Record<string, any>;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(8640000000000000)
+  timestamp?: number;
 
   @IsOptional()
   @IsString()
-  url?: string
+  @MaxLength(512)
+  url?: string;
 
   @IsOptional()
   @IsString()
-  referrer?: string
+  @MaxLength(512)
+  referrer?: string;
 }
