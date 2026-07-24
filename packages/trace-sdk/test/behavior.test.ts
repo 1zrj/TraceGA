@@ -63,7 +63,16 @@ describe('behavior utilities', () => {
     input.value = 'must-not-be-collected';
     input.setAttribute('data-trace-id', 'login-field');
 
+    // elementId requires explicit opt-in for privacy
     expect(getElementMetadata(input)).toEqual({
+      tagName: 'input',
+      traceId: 'login-field',
+      elementId: undefined,
+      role: undefined,
+      inputType: 'password',
+    });
+
+    expect(getElementMetadata(input, { collectElementId: true })).toEqual({
       tagName: 'input',
       traceId: 'login-field',
       elementId: 'x'.repeat(128),
