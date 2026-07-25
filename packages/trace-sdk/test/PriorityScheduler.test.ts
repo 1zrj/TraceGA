@@ -1,337 +1,333 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { PriorityScheduler } from '../src/core/PriorityScheduler';
-import { StoragePersister } from '../src/utils/StoragePersister';
-import type { TrackEventData } from '../src/types';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { PriorityScheduler } from '../src/core/PriorityScheduler'
+import { StoragePersister } from '../src/utils/StoragePersister'
+import type { TrackEventData } from '../src/types'
 
+/** 创建一条测试事件 */
 function makeEvent(name: string): TrackEventData {
   return {
+    eventType: 'custom',
     eventName: name,
+    appId: 'test',
     timestamp: Date.now(),
-    customParams: {},
-    commonParams: {},
-    envInfo: {
-      browser: 'Chrome',
-      os: 'Windows',
-      screen: '1920x1080',
-      viewport: '1920x1080',
-      uid: 'test',
-      url: 'http://localhost',
-      userAgent: 'test',
-    },
-  };
+    properties: {},
+    url: 'http://localhost',
+    referrer: '',
+  }
+}
+
+/** 从 onFlush mock 调用中提取事件名数组 */
+function eventNames(onFlush: ReturnType<typeof vi.fn>, callIndex = 0): string[] {
+  return onFlush.mock.calls[callIndex][0].map((e: TrackEventData) => e.eventName)
+}
+
+/** 创建 requestIdleCallback mock 并返回可触发的回调引用 */
+function mockIdleCallback(): { trigger: (idleId?: number) => void } {
+  let cb: (() => void) | null = null
+  vi.stubGlobal('requestIdleCallback', (fn: () => void) => {
+    cb = fn
+    return 1
+  })
+  vi.stubGlobal('cancelIdleCallback', vi.fn())
+  return {
+    trigger: () => cb?.(),
+  }
 }
 
 describe('PriorityScheduler', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-  });
+    vi.useFakeTimers()
+  })
 
   afterEach(() => {
-    vi.useRealTimers();
-  });
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
-  describe('add（按优先级存入队列）', () => {
-    it('should add events to the correct buffer', async () => {
-      const onFlush = vi.fn().mockResolvedValue(undefined);
-      const scheduler = new PriorityScheduler({
-        maxBufferSize: 10,
-        flushInterval: 5000,
-        onFlush,
-      });
+  // ── 基本功能：按优先级存入队列 ──
 
-      scheduler.add('urgent', makeEvent('u1'));
-      scheduler.add('high', makeEvent('h1'));
-      scheduler.add('normal', makeEvent('n1'));
+  describe('按优先级存入队列', () => {
+    it('add 将事件存入对应队列，flush 按 urgent→high→normal 顺序上报', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      const scheduler = new PriorityScheduler({ maxBufferSize: 10, flushInterval: 5000, onFlush })
 
-      // 手动 flush 触发全量上报
-      scheduler.flush();
-      await vi.advanceTimersByTimeAsync(0);
+      scheduler.add('urgent', makeEvent('u1'))
+      scheduler.add('high', makeEvent('h1'))
+      scheduler.add('normal', makeEvent('n1'))
 
-      expect(onFlush).toHaveBeenCalledTimes(1);
-      expect(onFlush).toHaveBeenCalledWith([
-        expect.objectContaining({ eventName: 'u1' }),
-        expect.objectContaining({ eventName: 'h1' }),
-        expect.objectContaining({ eventName: 'n1' }),
-      ]);
-    });
-  });
+      scheduler.flush()
+      await vi.advanceTimersByTimeAsync(0)
 
-  describe('全量上报优先级排序', () => {
-    it('should merge all queues in urgent → high → normal order', async () => {
-      const onFlush = vi.fn().mockResolvedValue(undefined);
-      const scheduler = new PriorityScheduler({
-        maxBufferSize: 10,
-        flushInterval: 5000,
-        onFlush,
-      });
+      expect(onFlush).toHaveBeenCalledTimes(1)
+      expect(eventNames(onFlush)).toEqual(['u1', 'h1', 'n1'])
+    })
 
-      scheduler.add('normal', makeEvent('n1'));
-      scheduler.add('normal', makeEvent('n2'));
-      scheduler.add('high', makeEvent('h1'));
-      scheduler.add('urgent', makeEvent('u1'));
-      scheduler.add('high', makeEvent('h2'));
-      scheduler.add('urgent', makeEvent('u2'));
+    it('混合优先级事件按 urgent→high→normal 排序', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      const scheduler = new PriorityScheduler({ maxBufferSize: 10, flushInterval: 5000, onFlush })
 
-      scheduler.flush();
-      await vi.advanceTimersByTimeAsync(0);
+      scheduler.add('normal', makeEvent('n1'))
+      scheduler.add('normal', makeEvent('n2'))
+      scheduler.add('high', makeEvent('h1'))
+      scheduler.add('urgent', makeEvent('u1'))
+      scheduler.add('high', makeEvent('h2'))
+      scheduler.add('urgent', makeEvent('u2'))
 
-      const events = onFlush.mock.calls[0][0];
-      const names = events.map((e: TrackEventData) => e.eventName);
-      expect(names).toEqual(['u1', 'u2', 'h1', 'h2', 'n1', 'n2']);
-    });
-  });
+      scheduler.flush()
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(eventNames(onFlush)).toEqual(['u1', 'u2', 'h1', 'h2', 'n1', 'n2'])
+    })
+  })
+
+  // ── 阈值触发 ──
 
   describe('阈值触发', () => {
-    it('should trigger full flush when urgent queue reaches its max', async () => {
-      const onFlush = vi.fn().mockResolvedValue(undefined);
-      const scheduler = new PriorityScheduler({
-        maxBufferSize: 10,
-        urgentMaxSize: 2,
-        flushInterval: 10000,
-        onFlush,
-      });
+    it('urgent 队列达到 urgentMaxSize 时触发全量上报', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      const scheduler = new PriorityScheduler({ maxBufferSize: 10, urgentMaxSize: 2, flushInterval: 10000, onFlush })
 
-      scheduler.add('urgent', makeEvent('u1'));
-      scheduler.add('normal', makeEvent('n1'));
-      expect(onFlush).not.toHaveBeenCalled();
+      scheduler.add('urgent', makeEvent('u1'))
+      scheduler.add('normal', makeEvent('n1'))
+      expect(onFlush).not.toHaveBeenCalled()
 
-      // 第 2 条 urgent 触发阈值
-      scheduler.add('urgent', makeEvent('u2'));
-      await vi.advanceTimersByTimeAsync(0);
+      scheduler.add('urgent', makeEvent('u2'))
+      await vi.advanceTimersByTimeAsync(0)
 
-      expect(onFlush).toHaveBeenCalledTimes(1);
-      const names = onFlush.mock.calls[0][0].map((e: TrackEventData) => e.eventName);
-      expect(names).toEqual(['u1', 'u2', 'n1']);
-    });
+      expect(onFlush).toHaveBeenCalledTimes(1)
+      expect(eventNames(onFlush)).toEqual(['u1', 'u2', 'n1'])
+    })
 
-    it('should trigger full flush when normal queue reaches its max', async () => {
-      const onFlush = vi.fn().mockResolvedValue(undefined);
-      const scheduler = new PriorityScheduler({
-        maxBufferSize: 3,
-        flushInterval: 10000,
-        onFlush,
-      });
+    it('normal 队列达到 maxBufferSize 时触发全量上报', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      const scheduler = new PriorityScheduler({ maxBufferSize: 3, flushInterval: 10000, onFlush })
 
-      scheduler.add('normal', makeEvent('n1'));
-      scheduler.add('normal', makeEvent('n2'));
-      expect(onFlush).not.toHaveBeenCalled();
+      scheduler.add('normal', makeEvent('n1'))
+      scheduler.add('normal', makeEvent('n2'))
+      expect(onFlush).not.toHaveBeenCalled()
 
-      scheduler.add('normal', makeEvent('n3'));
-      await vi.advanceTimersByTimeAsync(0);
+      scheduler.add('normal', makeEvent('n3'))
+      await vi.advanceTimersByTimeAsync(0)
 
-      expect(onFlush).toHaveBeenCalledTimes(1);
-    });
-  });
+      expect(onFlush).toHaveBeenCalledTimes(1)
+    })
+  })
 
-  describe('空闲调度（仅清空 normal 队列）', () => {
-    it('should flush only normal queue on idle callback', async () => {
-      const onFlush = vi.fn().mockResolvedValue(undefined);
+  // ── 空闲调度 ──
 
-      // mock requestIdleCallback
-      let idleCallback: ((deadline: IdleDeadline) => void) | null = null;
-      vi.stubGlobal('requestIdleCallback', (cb: (d: IdleDeadline) => void) => {
-        idleCallback = cb;
-        return 1;
-      });
-      vi.stubGlobal('cancelIdleCallback', vi.fn());
+  describe('空闲调度', () => {
+    it('空闲回调仅上报 normal 队列，保留 urgent 和 high', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      const idle = mockIdleCallback()
 
-      const scheduler = new PriorityScheduler({
-        maxBufferSize: 10,
-        flushInterval: 5000,
-        onFlush,
-      });
+      const scheduler = new PriorityScheduler({ maxBufferSize: 10, flushInterval: 5000, onFlush })
 
-      scheduler.add('urgent', makeEvent('u1'));
-      scheduler.add('high', makeEvent('h1'));
-      scheduler.add('normal', makeEvent('n1'));
-      scheduler.add('normal', makeEvent('n2'));
+      scheduler.add('urgent', makeEvent('u1'))
+      scheduler.add('high', makeEvent('h1'))
+      scheduler.add('normal', makeEvent('n1'))
+      scheduler.add('normal', makeEvent('n2'))
 
-      // 触发空闲回调
-      expect(idleCallback).not.toBeNull();
-      idleCallback!({
-        didTimeout: false,
-        timeRemaining: () => 50,
-      });
-      await vi.advanceTimersByTimeAsync(0);
+      idle.trigger()
+      await vi.advanceTimersByTimeAsync(0)
 
-      // 仅 normal 队列被上报
-      expect(onFlush).toHaveBeenCalledTimes(1);
-      const names = onFlush.mock.calls[0][0].map((e: TrackEventData) => e.eventName);
-      expect(names).toEqual(['n1', 'n2']);
+      expect(onFlush).toHaveBeenCalledTimes(1)
+      expect(eventNames(onFlush)).toEqual(['n1', 'n2'])
 
-      // 空闲回调后，urgent 和 high 仍保留在队列中
-      // 手动 flush 验证它们还在
-      onFlush.mockClear();
-      scheduler.flush();
-      await vi.advanceTimersByTimeAsync(0);
+      // 验证 urgent 和 high 还留在队列
+      onFlush.mockClear()
+      scheduler.flush()
+      await vi.advanceTimersByTimeAsync(0)
 
-      expect(onFlush).toHaveBeenCalledTimes(1);
-      const remainingNames = onFlush.mock.calls[0][0].map((e: TrackEventData) => e.eventName);
-      expect(remainingNames).toEqual(['u1', 'h1']);
-    });
+      expect(onFlush).toHaveBeenCalledTimes(1)
+      expect(eventNames(onFlush)).toEqual(['u1', 'h1'])
+    })
 
-    it('should fallback to setTimeout when requestIdleCallback is unavailable', async () => {
-      const onFlush = vi.fn().mockResolvedValue(undefined);
+    it('requestIdleCallback 不可用时降级为 setTimeout', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('requestIdleCallback', undefined)
 
-      // 确保 requestIdleCallback 不可用
-      vi.stubGlobal('requestIdleCallback', undefined);
+      const scheduler = new PriorityScheduler({ maxBufferSize: 10, flushInterval: 5000, onFlush, idleTimeoutFallback: 2000 })
 
-      const scheduler = new PriorityScheduler({
-        maxBufferSize: 10,
-        flushInterval: 5000,
-        onFlush,
-        idleTimeoutFallback: 2000,
-      });
+      scheduler.add('normal', makeEvent('n1'))
+      scheduler.add('normal', makeEvent('n2'))
 
-      scheduler.add('normal', makeEvent('n1'));
-      scheduler.add('normal', makeEvent('n2'));
+      await vi.advanceTimersByTimeAsync(2000)
+      await vi.advanceTimersByTimeAsync(0)
 
-      // 推进降级超时时间
-      await vi.advanceTimersByTimeAsync(2000);
-      await vi.advanceTimersByTimeAsync(0);
+      expect(onFlush).toHaveBeenCalledTimes(1)
+      expect(eventNames(onFlush)).toEqual(['n1', 'n2'])
+    })
 
-      expect(onFlush).toHaveBeenCalledTimes(1);
-      const names = onFlush.mock.calls[0][0].map((e: TrackEventData) => e.eventName);
-      expect(names).toEqual(['n1', 'n2']);
-    });
+    it('normal 队列为空时空闲回调不触发 onFlush', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      const idle = mockIdleCallback()
 
-    it('should not affect urgent/high queues during idle flush', async () => {
-      const onFlush = vi.fn().mockResolvedValue(undefined);
+      const scheduler = new PriorityScheduler({ maxBufferSize: 10, flushInterval: 5000, onFlush })
 
-      let idleCallback: ((deadline: IdleDeadline) => void) | null = null;
-      vi.stubGlobal('requestIdleCallback', (cb: (d: IdleDeadline) => void) => {
-        idleCallback = cb;
-        return 1;
-      });
-      vi.stubGlobal('cancelIdleCallback', vi.fn());
+      scheduler.add('normal', makeEvent('n1'))
 
-      const scheduler = new PriorityScheduler({
-        maxBufferSize: 10,
-        flushInterval: 5000,
-        onFlush,
-      });
+      idle.trigger()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onFlush).toHaveBeenCalledTimes(1)
 
-      // 只有 normal 队列有数据
-      scheduler.add('normal', makeEvent('n1'));
+      // 第二次空闲回调，normal 已空
+      onFlush.mockClear()
+      idle.trigger()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onFlush).not.toHaveBeenCalled()
+    })
+  })
 
-      idleCallback!({
-        didTimeout: false,
-        timeRemaining: () => 50,
-      });
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(onFlush).toHaveBeenCalledTimes(1);
-      expect(onFlush).toHaveBeenCalledWith([expect.objectContaining({ eventName: 'n1' })]);
-
-      // 再次空闲回调，normal 已空，不应触发 onFlush
-      onFlush.mockClear();
-      idleCallback!({
-        didTimeout: false,
-        timeRemaining: () => 50,
-      });
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(onFlush).not.toHaveBeenCalled();
-    });
-  });
+  // ── 定时触发 ──
 
   describe('定时触发', () => {
-    it('should flush all queues on interval', async () => {
-      const onFlush = vi.fn().mockResolvedValue(undefined);
-      const scheduler = new PriorityScheduler({
-        maxBufferSize: 10,
-        flushInterval: 3000,
-        onFlush,
-      });
+    it('到达间隔时间后全量上报所有队列', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      const scheduler = new PriorityScheduler({ maxBufferSize: 10, flushInterval: 3000, onFlush })
 
-      scheduler.add('urgent', makeEvent('u1'));
-      scheduler.add('normal', makeEvent('n1'));
+      scheduler.add('urgent', makeEvent('u1'))
+      scheduler.add('normal', makeEvent('n1'))
 
-      await vi.advanceTimersByTimeAsync(3000);
-      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(3000)
+      await vi.advanceTimersByTimeAsync(0)
 
-      expect(onFlush).toHaveBeenCalledTimes(1);
-      const names = onFlush.mock.calls[0][0].map((e: TrackEventData) => e.eventName);
-      expect(names).toEqual(['u1', 'n1']);
-    });
-  });
+      expect(onFlush).toHaveBeenCalledTimes(1)
+      expect(eventNames(onFlush)).toEqual(['u1', 'n1'])
+    })
+  })
+
+  // ── pause ──
+
+  describe('pause', () => {
+    it('暂停后定时器不再触发，flush 仍可手动触发', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      // 阻止 idle 回调干扰
+      vi.stubGlobal('requestIdleCallback', () => 1)
+      vi.stubGlobal('cancelIdleCallback', vi.fn())
+
+      const scheduler = new PriorityScheduler({ maxBufferSize: 10, flushInterval: 3000, onFlush })
+
+      scheduler.add('urgent', makeEvent('u1'))
+      scheduler.pause()
+
+      await vi.advanceTimersByTimeAsync(10000)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onFlush).not.toHaveBeenCalled()
+
+      // 手动 flush 仍有效
+      scheduler.flush()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onFlush).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // ── takeAll ──
+
+  describe('takeAll', () => {
+    it('返回所有队列数据且清空缓冲区，不触发 onFlush', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      const scheduler = new PriorityScheduler({ maxBufferSize: 10, flushInterval: 5000, onFlush })
+
+      scheduler.add('urgent', makeEvent('u1'))
+      scheduler.add('high', makeEvent('h1'))
+      scheduler.add('normal', makeEvent('n1'))
+
+      const all = scheduler.takeAll()
+
+      expect(all.map(e => e.eventName)).toEqual(['u1', 'h1', 'n1'])
+      expect(onFlush).not.toHaveBeenCalled()
+
+      // 队列已清空
+      scheduler.flush()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onFlush).not.toHaveBeenCalled()
+    })
+  })
+
+  // ── destroy ──
 
   describe('destroy', () => {
-    it('should clear all queues and stop scheduling', async () => {
-      const onFlush = vi.fn().mockResolvedValue(undefined);
-      vi.stubGlobal('cancelIdleCallback', vi.fn());
+    it('销毁后定时器和空闲回调均停止', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('cancelIdleCallback', vi.fn())
 
-      const scheduler = new PriorityScheduler({
-        maxBufferSize: 10,
-        flushInterval: 3000,
-        onFlush,
-      });
+      const scheduler = new PriorityScheduler({ maxBufferSize: 10, flushInterval: 3000, onFlush })
 
-      scheduler.add('urgent', makeEvent('u1'));
-      scheduler.add('normal', makeEvent('n1'));
-      scheduler.destroy();
+      scheduler.add('urgent', makeEvent('u1'))
+      scheduler.add('normal', makeEvent('n1'))
+      scheduler.destroy()
 
-      await vi.advanceTimersByTimeAsync(10000);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(onFlush).not.toHaveBeenCalled();
-    });
-  });
+      await vi.advanceTimersByTimeAsync(10000)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onFlush).not.toHaveBeenCalled()
+    })
+
+    it('销毁后 add 不触发阈值上报', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('cancelIdleCallback', vi.fn())
+
+      const scheduler = new PriorityScheduler({ maxBufferSize: 2, flushInterval: 5000, onFlush })
+
+      scheduler.add('normal', makeEvent('n1'))
+      scheduler.destroy()
+      scheduler.add('normal', makeEvent('n2'))
+
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onFlush).not.toHaveBeenCalled()
+    })
+  })
+
+  // ── persister 缓存恢复 ──
 
   describe('persister 缓存恢复', () => {
-    it('should recover cached failed data as urgent on init', async () => {
-      // 模拟缓存一条失败数据
-      const persister = new StoragePersister();
-      persister.save('trace_failed_cache', { eventName: 'cached_event', timestamp: 1, customParams: {}, commonParams: {}, envInfo: {} as any });
+    it('初始化时恢复单条缓存并以 urgent 优先级上报', async () => {
+      const persister = new StoragePersister()
+      persister.save('trace_failed_cache', makeEvent('cached'))
 
-      const onFlush = vi.fn().mockResolvedValue(undefined);
-      vi.stubGlobal('requestIdleCallback', () => 1);
-      vi.stubGlobal('cancelIdleCallback', vi.fn());
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('requestIdleCallback', () => 1)
+      vi.stubGlobal('cancelIdleCallback', vi.fn())
 
-      new PriorityScheduler({
-        maxBufferSize: 10,
-        flushInterval: 5000,
-        onFlush,
-        persister,
-      });
+      new PriorityScheduler({ maxBufferSize: 10, flushInterval: 5000, onFlush, persister })
 
-      // recoverFailedCache 会立即触发一次全量上报
-      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0)
 
-      expect(onFlush).toHaveBeenCalledTimes(1);
-      const names = onFlush.mock.calls[0][0].map((e: TrackEventData) => e.eventName);
-      expect(names).toContain('cached_event');
+      expect(onFlush).toHaveBeenCalledTimes(1)
+      expect(eventNames(onFlush)).toContain('cached')
+      expect(persister.load('trace_failed_cache')).toBeNull()
+    })
 
-      // 缓存已被清除
-      const cached = persister.load('trace_failed_cache');
-      expect(cached).toBeNull();
-    });
+    it('初始化时恢复多条缓存并以 urgent 优先级上报', async () => {
+      const persister = new StoragePersister()
+      persister.save('trace_failed_cache', [makeEvent('f1'), makeEvent('f2')])
 
-    it('should recover multiple cached events as urgent', async () => {
-      const persister = new StoragePersister();
-      persister.save('trace_failed_cache', [
-        { eventName: 'f1', timestamp: 1, customParams: {}, commonParams: {}, envInfo: {} as any },
-        { eventName: 'f2', timestamp: 2, customParams: {}, commonParams: {}, envInfo: {} as any },
-      ]);
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('requestIdleCallback', () => 1)
+      vi.stubGlobal('cancelIdleCallback', vi.fn())
 
-      const onFlush = vi.fn().mockResolvedValue(undefined);
-      vi.stubGlobal('requestIdleCallback', () => 1);
-      vi.stubGlobal('cancelIdleCallback', vi.fn());
+      new PriorityScheduler({ maxBufferSize: 10, flushInterval: 5000, onFlush, persister })
 
-      new PriorityScheduler({
-        maxBufferSize: 10,
-        flushInterval: 5000,
-        onFlush,
-        persister,
-      });
+      await vi.advanceTimersByTimeAsync(0)
 
-      await vi.advanceTimersByTimeAsync(0);
+      expect(onFlush).toHaveBeenCalledTimes(1)
+      expect(eventNames(onFlush)).toEqual(['f1', 'f2'])
+      expect(persister.load('trace_failed_cache')).toBeNull()
+    })
+  })
 
-      expect(onFlush).toHaveBeenCalledTimes(1);
-      const names = onFlush.mock.calls[0][0].map((e: TrackEventData) => e.eventName);
-      expect(names).toEqual(['f1', 'f2']);
+  // ── 并发安全 ──
 
-      const cached = persister.load('trace_failed_cache');
-      expect(cached).toBeNull();
-    });
-  });
-});
+  describe('并发安全', () => {
+    it('flushing 锁防止并发全量上报', async () => {
+      const onFlush = vi.fn().mockResolvedValue(undefined)
+      const scheduler = new PriorityScheduler({ maxBufferSize: 2, flushInterval: 5000, onFlush })
+
+      scheduler.add('normal', makeEvent('n1'))
+      scheduler.add('normal', makeEvent('n2')) // 阈值触发
+      scheduler.flush() // 手动 flush 竞争
+
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onFlush).toHaveBeenCalledTimes(1)
+    })
+  })
+})

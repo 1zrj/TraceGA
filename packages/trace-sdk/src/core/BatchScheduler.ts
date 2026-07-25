@@ -1,16 +1,16 @@
-import { EventBuffer } from './EventBuffer';
-import type { TrackEventData } from '../types';
-import type { ConcurrencyLimiter } from './ConcurrencyLimiter';
+import { EventBuffer } from './EventBuffer'
+import type { TrackEventData } from '../types'
+import type { ConcurrencyLimiter } from './ConcurrencyLimiter'
 
 export interface BatchSchedulerConfig {
   /** 缓冲区最大容量，达到后立即触发上报 */
-  maxBufferSize: number;
+  maxBufferSize: number
   /** 定时上报间隔（毫秒） */
-  flushInterval: number;
+  flushInterval: number
   /** 上报回调，接收待上报的事件数组 */
-  onFlush: (events: TrackEventData[]) => Promise<void>;
+  onFlush: (events: TrackEventData[]) => Promise<void>
   /** 并发限制器，用于控制同时进行的上报请求数 */
-  limiter?: ConcurrencyLimiter;
+  limiter?: ConcurrencyLimiter
 }
 
 /**
@@ -19,27 +19,31 @@ export interface BatchSchedulerConfig {
  * 双触发机制：
  * - **定时触发**：每隔 `flushInterval` 毫秒自动上报
  * - **阈值触发**：缓冲区满时立即上报，并重置定时器防止连续触发
+ *
+ * 上报失败由底层 transporter 的重试/缓存机制处理，调度器仅静默忽略。
  */
 export class BatchScheduler {
-  private buffer: EventBuffer<TrackEventData>;
-  private maxBufferSize: number;
-  private flushInterval: number;
-  private onFlush: (events: TrackEventData[]) => Promise<void>;
-  private timerId: ReturnType<typeof setTimeout> | null;
-  private flushing: boolean;
-  private limiter: ConcurrencyLimiter | undefined;
+  private readonly buffer: EventBuffer<TrackEventData>
+  private readonly maxBufferSize: number
+  private readonly flushInterval: number
+  private readonly onFlush: (events: TrackEventData[]) => Promise<void>
+  private readonly limiter: ConcurrencyLimiter | undefined
+
+  private timerId: ReturnType<typeof setTimeout> | null = null
+  private flushing = false
+  private destroyed = false
 
   constructor(config: BatchSchedulerConfig) {
-    this.maxBufferSize = config.maxBufferSize;
-    this.buffer = new EventBuffer<TrackEventData>(config.maxBufferSize);
-    this.flushInterval = config.flushInterval;
-    this.onFlush = config.onFlush;
-    this.timerId = null;
-    this.flushing = false;
-    this.limiter = config.limiter;
+    this.maxBufferSize = config.maxBufferSize
+    this.flushInterval = config.flushInterval
+    this.onFlush = config.onFlush
+    this.limiter = config.limiter
+    this.buffer = new EventBuffer<TrackEventData>(config.maxBufferSize)
 
-    this.scheduleNext();
+    this.scheduleNext()
   }
+
+  // ── 公开 API ──
 
   /**
    * 向缓冲区添加一条事件。
@@ -48,11 +52,11 @@ export class BatchScheduler {
    * @param event - 待添加的埋点事件
    */
   add(event: TrackEventData): void {
-    this.buffer.push(event);
+    this.buffer.push(event)
 
     if (this.buffer.size() >= this.maxBufferSize) {
-      this.clearTimer();
-      this.doFlushAndSchedule();
+      this.clearTimer()
+      this.flushAndReschedule()
     }
   }
 
@@ -61,51 +65,45 @@ export class BatchScheduler {
    * 执行后重置定时器。
    */
   flush(): void {
-    this.clearTimer();
-    this.doFlushAndSchedule();
+    this.clearTimer()
+    this.flushAndReschedule()
   }
 
   /**
    * 销毁调度器，清除定时器并清空缓冲区。
+   * 销毁后 `add` / `flush` 无效果，定时器不再调度。
    */
   destroy(): void {
-    this.clearTimer();
-    this.buffer.clear();
+    this.destroyed = true
+    this.clearTimer()
+    this.buffer.clear()
   }
+
+  // ── 私有方法 ──
 
   /**
    * 安排下一次定时上报。
+   * 已销毁时跳过。
    */
   private scheduleNext(): void {
-    this.timerId = setTimeout(() => {
-      this.doScheduledFlush();
-    }, this.flushInterval);
+    if (this.destroyed) return
+    this.timerId = setTimeout(() => this.flushAndReschedule(), this.flushInterval)
   }
 
   /**
-   * 定时触发的上报：执行上报后安排下一次。
+   * 执行上报并重新安排定时器。
    * 上报失败静默处理（已在 transporter 中完成重试/缓存）。
+   * 已销毁时跳过定时器调度。
    */
-  private async doScheduledFlush(): Promise<void> {
+  private async flushAndReschedule(): Promise<void> {
     try {
-      await this.doFlush();
+      await this.doFlush()
     } catch {
       // 上报失败已在 transporter 中处理
     }
-    this.scheduleNext();
-  }
-
-  /**
-   * 阈值/手动触发后，执行上报并重新安排定时器。
-   * 上报失败静默处理（已在 transporter 中完成重试/缓存）。
-   */
-  private async doFlushAndSchedule(): Promise<void> {
-    try {
-      await this.doFlush();
-    } catch {
-      // 上报失败已在 transporter 中处理
+    if (!this.destroyed) {
+      this.scheduleNext()
     }
-    this.scheduleNext();
   }
 
   /**
@@ -113,8 +111,8 @@ export class BatchScheduler {
    */
   private clearTimer(): void {
     if (this.timerId !== null) {
-      clearTimeout(this.timerId);
-      this.timerId = null;
+      clearTimeout(this.timerId)
+      this.timerId = null
     }
   }
 
@@ -123,21 +121,21 @@ export class BatchScheduler {
    * 使用 `flushing` 锁防止并发上报。
    */
   private async doFlush(): Promise<void> {
-    if (this.flushing) return;
+    if (this.flushing) return
 
-    const events = this.buffer.takeAll();
-    if (events.length === 0) return;
+    const events = this.buffer.takeAll()
+    if (events.length === 0) return
 
-    this.flushing = true;
+    this.flushing = true
     try {
-      await this.limiter?.acquire();
+      await this.limiter?.acquire()
       try {
-        await this.onFlush(events);
+        await this.onFlush(events)
       } finally {
-        this.limiter?.release();
+        this.limiter?.release()
       }
     } finally {
-      this.flushing = false;
+      this.flushing = false
     }
   }
 }
