@@ -93,9 +93,27 @@ export class Reporter {
       this.destroy()
     }
 
-    this.config = Object.freeze({ ...DEFAULT_CONFIG, ...config })
-    this.commonParams = {}
-    this.envInfo = this.collectEnvInfo()
+    this.config = { ...DEFAULT_CONFIG, ...config };
+    // Normalize projectId: support both projectId and appId (backward compat)
+    if (!this.config.projectId && (config as any).appId) {
+      this.config.projectId = (config as any).appId;
+    }
+    this.commonParams = {};
+    this.envInfo = this.collectEnvInfo();
+
+    this.persister = new StoragePersister();
+    this.limiter = new ConcurrencyLimiter(5);
+
+    this.transporter = new HttpTransporter({
+      baseURL: this.config.reportUrl,
+      timeout: 10000,
+      persister: this.persister,
+    });
+
+    // 将 transporter 的事件钩子转发为 Reporter 事件
+    this.transporter.on('success', meta => this.emit('success', meta));
+    this.transporter.on('failed', meta => this.emit('failed', meta));
+    this.transporter.on('retry', meta => this.emit('retry', meta));
 
     this.initSubModules()
     this.bindTransporterEvents()

@@ -51,7 +51,7 @@ export class TraceCore implements ITraceCore {
 
       const resolvedConfig = Object.freeze({
         ...DEFAULT_CONFIG,
-        projectId: config.projectId.trim(),
+        projectId: this.resolveProjectId(config),
         reportUrl: config.reportUrl.trim(),
         sampleRate: this.resolveSampleRate(config.sampleRate, DEFAULT_CONFIG.sampleRate),
         maxBufferSize: this.resolveBufferSize(config.maxBufferSize, DEFAULT_CONFIG.maxBufferSize),
@@ -68,10 +68,33 @@ export class TraceCore implements ITraceCore {
         hooks: Object.freeze(hooks),
       }) as ResolvedTraceConfig;
 
+      // 1. Uninstall old plugins FIRST (restores native fetch/XHR before new reporter captures them)
+      this.disposeBuiltinPlugins();
+
+      // 2. Drain pending events from old managed reporter, then dispose it
+      const pendingEvents = this.drainManagedReporter();
+
+      // 3. Set new config and env info
       this.config = resolvedConfig;
       this.envInfo = collectEnvInfo(this.getEnvCollectionOptions());
+
+      // 4. Create new reporter (now captures native fetch, not patched)
       this.configureManagedReporter(resolvedConfig);
+
+      // 5. Re-enqueue pending events from old reporter into new one
+      if (pendingEvents.length > 0 && this.reporter) {
+        for (const { event, priority } of pendingEvents) {
+          try {
+            this.reporter.report(event, priority);
+          } catch {
+            // Silently drop events that can't be migrated
+          }
+        }
+      }
+
+      // 6. Install new plugins (with clean native fetch/XHR)
       this.syncBuiltinPlugins(resolvedConfig);
+
       const configSnapshot = deepClone(resolvedConfig);
       this.runHook(() => resolvedConfig.hooks.onReady?.(configSnapshot), 'onReady');
     } catch (error) {
@@ -81,8 +104,36 @@ export class TraceCore implements ITraceCore {
     }
   }
 
-  trackEvent(eventName: string, params: TrackEventParams = {}, priority: EventPriority = 'normal', eventType: EventType = 'custom'): void {
+  // Supports two signatures:
+  // New: trackEvent(eventName, params?, priority?, eventType?)
+  // Old (compat): trackEvent(eventType, eventName, params?)
+  trackEvent(
+    arg1: string,
+    arg2: TrackEventParams | string = {},
+    arg3: EventPriority | TrackEventParams = 'normal',
+    arg4: EventType = 'custom',
+  ): void {
     try {
+      let eventName: string;
+      let params: TrackEventParams;
+      let priority: EventPriority;
+      let eventType: EventType;
+
+      // Runtime detection: old signature has eventType as first arg and eventName (string) as second
+      if (typeof arg2 === 'string') {
+        // Old: trackEvent(eventType, eventName, params?)
+        eventType = arg1 as EventType;
+        eventName = arg2;
+        params = (typeof arg3 === 'object' && arg3 !== null ? arg3 : {}) as TrackEventParams;
+        priority = 'normal';
+      } else {
+        // New: trackEvent(eventName, params?, priority?, eventType?)
+        eventName = arg1;
+        params = arg2 as TrackEventParams;
+        priority = (typeof arg3 === 'string' ? arg3 : 'normal') as EventPriority;
+        eventType = arg4;
+      }
+
       if (!this.config || !this.envInfo) {
         return;
       }
@@ -402,8 +453,10 @@ export class TraceCore implements ITraceCore {
     if (!config || typeof config !== 'object') {
       throw new TypeError('config is required');
     }
-    if (typeof config.projectId !== 'string' || !config.projectId.trim()) {
-      throw new TypeError('projectId must be a non-empty string');
+
+    const projectId = (config.projectId || config.appId || '').trim();
+    if (!projectId) {
+      throw new TypeError('projectId or appId must be a non-empty string');
     }
     if (typeof config.reportUrl !== 'string' || !config.reportUrl.trim()) {
       throw new TypeError('reportUrl must be a non-empty string');
@@ -413,6 +466,15 @@ export class TraceCore implements ITraceCore {
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
       throw new TypeError('reportUrl must use http or https');
     }
+
+    if (config.projectId && config.appId && config.projectId !== config.appId && config.enableDebug) {
+      // eslint-disable-next-line no-console
+      console.warn('[TraceGA] Both projectId and appId provided; projectId takes precedence.');
+    }
+  }
+
+  private resolveProjectId(config: TraceConfig): string {
+    return (config.projectId || config.appId || '').trim();
   }
 
   private resolveHooks(config: unknown): TraceLifecycleHooks {
@@ -504,12 +566,35 @@ export class TraceCore implements ITraceCore {
       return;
     }
 
-    this.disposeManagedReporter();
+    // disposeManagedReporter must have been called BEFORE this method
+    // (called in register() before configureManagedReporter)
     const reporter = new DefaultReporter(config, (error, context) => {
       this.handleError(error, context);
     });
     this.managedReporter = reporter;
     this.reporter = reporter;
+  }
+
+  private drainManagedReporter(): Array<{ event: TrackEventData; priority: EventPriority }> {
+    if (!this.managedReporter) {
+      return [];
+    }
+
+    try {
+      // drainEvents() already detaches lifecycle listeners and sets state to destroyed,
+      // so we only need to clear our references — no need to call destroy() again.
+      const drained = this.managedReporter.drainEvents();
+      const reporter = this.managedReporter;
+      this.managedReporter = null;
+      if (this.reporter === reporter) {
+        this.reporter = null;
+      }
+      return drained;
+    } catch {
+      // On error, fall back to full dispose
+      this.disposeManagedReporter();
+      return [];
+    }
   }
 
   private disposeManagedReporter(): void {
@@ -539,7 +624,9 @@ export class TraceCore implements ITraceCore {
   }
 
   private syncBuiltinPlugins(config: Readonly<ResolvedTraceConfig>): void {
-    this.disposeBuiltinPlugins();
+    // NOTE: caller (register()) already called disposeBuiltinPlugins() before
+    // creating the new reporter, so old plugins are already uninstalled at this point.
+    // We still guard here in case syncBuiltinPlugins is called from other contexts.
 
     if (config.enableAutoError || config.plugins.error) {
       this.errorPlugin = new ErrorPlugin({

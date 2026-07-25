@@ -31,10 +31,18 @@ interface BatchJob {
   events: TrackEventData[]
 }
 
-/** 错误处理器类型 */
-type ReporterErrorHandler = (error: unknown, context: string) => void
+type ReporterErrorHandler = (error: unknown, context: string) => void;
+type ReporterState = 'active' | 'draining' | 'destroyed';
 
-// ─── 工具函数 ───────────────────────────────────────────────
+const MAX_RETRY_ATTEMPTS = 2;
+const MAX_QUEUED_EVENTS = 1000;
+const REQUEST_TIMEOUT = 10000;
+const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
+function getRetryDelay(attempts: number): number {
+  const base = Math.min(1000 * 2 ** attempts, 30000);
+  return base * (0.5 + Math.random() * 0.5);
+}
 
 /**
  * 根据上报地址构造批量上报 URL。
@@ -54,39 +62,40 @@ function getBatchUrl(reportUrl: string): string {
   return parsedUrl.href
 }
 
-// ─── DefaultReporter 类 ─────────────────────────────────────
+export interface ReporterMetrics {
+  queuedEvents: number;
+  activeJobs: number;
+  retryCount: number;
+  droppedEvents: number;
+  persistedEvents: number;
+  totalSent: number;
+  totalFailed: number;
+}
 
-/**
- * 默认上报器实现，负责批量发送埋点事件。
- *
- * 特性：
- * - 批量聚合：按缓冲区大小分批，并发控制发送
- * - 失败重试：指数退避，最多重试 2 次
- * - 页面关闭兜底：pagehide / visibilitychange 时使用 sendBeacon
- * - 传输降级：fetch 不可用时使用 sendBeacon
- */
 export class DefaultReporter implements TraceReporter {
-  // ── 私有属性 ──────────────────────────────────────────
+  private readonly batchUrl: string;
+  private readonly maxBufferSize: number;
+  private readonly flushInterval: number;
+  private readonly maxConcurrentRequests: number;
+  private readonly fetchImpl: typeof fetch | null;
 
-  private readonly batchUrl: string
-  private readonly maxBufferSize: number
-  private readonly flushInterval: number
-  private readonly maxConcurrentRequests: number
-  private readonly fetchImpl: typeof fetch | null
+  private eventQueue: TrackEventData[] = [];
+  private queueHead = 0;
+  private jobQueue: BatchJob[] = [];
+  private activeJobRefs: BatchJob[] = [];
+  private activeJobs = 0;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private state: ReporterState = 'active';
+  private transportUnavailableReported = false;
+  private pendingRetries = new Map<ReturnType<typeof setTimeout>, BatchJob>();
 
-  private eventQueue: TrackEventData[] = []
-  private jobQueue: BatchJob[] = []
-  private activeJobs = 0
-  private timer: ReturnType<typeof setTimeout> | null = null
-  private destroyed = false
-  private transportUnavailableReported = false
+  // Metrics
+  private totalRetries = 0;
+  private droppedEvents = 0;
+  private persistedEvents = 0;
+  private totalSent = 0;
+  private totalFailed = 0;
 
-  // ── 构造器 ────────────────────────────────────────────
-
-  /**
-   * @param config      - 解析后的完整配置
-   * @param handleError - 错误处理回调
-   */
   constructor(
     config: Readonly<ResolvedTraceConfig>,
     private readonly handleError: ReporterErrorHandler,
@@ -114,8 +123,8 @@ export class DefaultReporter implements TraceReporter {
    * @param priority - 事件优先级，urgent 时立即触发上报
    */
   report(event: TrackEventData, priority: EventPriority): void {
-    if (this.destroyed) {
-      return
+    if (this.state !== 'active') {
+      return;
     }
 
     if (!this.fetchImpl && !this.canUseBeacon()) {
@@ -126,11 +135,17 @@ export class DefaultReporter implements TraceReporter {
       return
     }
 
-    this.eventQueue.push(deepClone(event))
+    // Backpressure: drop oldest normal events when queue is full
+    const queuedCount = this.eventQueue.length - this.queueHead;
+    if (queuedCount >= MAX_QUEUED_EVENTS) {
+      this.dropOldestNormalEvent();
+    }
 
-    if (priority === 'urgent' || this.eventQueue.length >= this.maxBufferSize) {
-      this.flush()
-      return
+    this.eventQueue.push(deepClone(event));
+
+    if (priority === 'urgent' || queuedCount + 1 >= this.maxBufferSize) {
+      this.flush();
+      return;
     }
 
     this.scheduleFlush(this.flushInterval)
@@ -140,8 +155,8 @@ export class DefaultReporter implements TraceReporter {
    * 手动触发上报，将当前队列中的事件分批发送。
    */
   flush(): void {
-    if (this.destroyed || (!this.fetchImpl && !this.canUseBeacon())) {
-      return
+    if (this.state !== 'active' || (!this.fetchImpl && !this.canUseBeacon())) {
+      return;
     }
 
     this.clearTimer()
@@ -149,36 +164,101 @@ export class DefaultReporter implements TraceReporter {
     this.pumpJobs()
   }
 
-  /**
-   * 销毁上报器，释放所有资源。
-   * 销毁前会尝试使用 sendBeacon 发送剩余事件。
-   */
-  destroy(): void {
-    if (this.destroyed) {
-      return
+  async destroy(): Promise<void> {
+    if (this.state !== 'active') {
+      return;
     }
 
-    this.flushWithBeacon()
-    this.destroyed = true
-    this.clearTimer()
+    this.state = 'draining';
+    this.clearTimer();
+    this.removeLifecycleListeners();
 
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('pagehide', this.handlePageHide)
+    this.createBatchJobs();
+
+    const retryJobs: BatchJob[] = [];
+    for (const [timerId, job] of this.pendingRetries) {
+      clearTimeout(timerId);
+      retryJobs.push(job);
     }
-    if (typeof document !== 'undefined') {
-      document.removeEventListener('visibilitychange', this.handleVisibilityChange)
+    this.pendingRetries.clear();
+
+    const allJobs = [...this.activeJobRefs, ...retryJobs, ...this.jobQueue];
+    this.jobQueue = [];
+
+    for (const job of allJobs) {
+      const sent = this.trySendBeaconForJob(job);
+      if (!sent && this.fetchImpl) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+          const response = await this.fetchImpl(this.batchUrl, {
+            body: safeJsonStringify({ events: job.events }),
+            headers: { 'content-type': 'application/json' },
+            keepalive: true,
+            method: 'POST',
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          if (!response.ok) {
+            this.persistJob(job);
+          } else {
+            this.totalSent++;
+          }
+        } catch {
+          this.persistJob(job);
+        }
+      } else if (!sent && !this.fetchImpl) {
+        this.persistJob(job);
+      }
     }
 
-    this.eventQueue = []
-    this.jobQueue = []
+    this.state = 'destroyed';
+    this.activeJobRefs = [];
+    this.eventQueue = [];
+    this.jobQueue = [];
+    this.queueHead = 0;
   }
 
-  // ── 私有方法：初始化 ──────────────────────────────────
-
   /**
-   * 捕获 window.fetch 引用，保存 bind 后的版本。
-   * 若 fetch 不可用则返回 null。
+   * Drain all pending events for migration to a new reporter instance.
+   * Called by TraceCore during re-register.
    */
+  drainEvents(): Array<{ event: TrackEventData; priority: EventPriority }> {
+    this.clearTimer();
+    this.removeLifecycleListeners();
+
+    const result: Array<{ event: TrackEventData; priority: EventPriority }> = [];
+
+    for (let i = this.queueHead; i < this.eventQueue.length; i++) {
+      result.push({ event: this.eventQueue[i], priority: 'normal' });
+    }
+    this.eventQueue = [];
+    this.queueHead = 0;
+
+    for (const job of this.jobQueue) {
+      for (const event of job.events) {
+        result.push({ event, priority: 'normal' });
+      }
+    }
+    this.jobQueue = [];
+
+    this.state = 'destroyed';
+    return result;
+  }
+
+  getMetrics(): Readonly<ReporterMetrics> {
+    return Object.freeze({
+      queuedEvents: this.eventQueue.length - this.queueHead,
+      activeJobs: this.activeJobs,
+      retryCount: this.totalRetries,
+      droppedEvents: this.droppedEvents,
+      persistedEvents: this.persistedEvents,
+      totalSent: this.totalSent,
+      totalFailed: this.totalFailed,
+    });
+  }
+
+
   private captureFetch(): typeof fetch | null {
     if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
       return window.fetch.bind(window)
@@ -192,11 +272,20 @@ export class DefaultReporter implements TraceReporter {
    * 将事件队列按 maxBufferSize 拆分为批量任务。
    */
   private createBatchJobs(): void {
-    while (this.eventQueue.length > 0) {
+    while (this.queueHead < this.eventQueue.length) {
+      const end = Math.min(this.queueHead + this.maxBufferSize, this.eventQueue.length);
+      const batch = this.eventQueue.slice(this.queueHead, end);
+      this.queueHead = end;
       this.jobQueue.push({
         attempts: 0,
-        events: this.eventQueue.splice(0, this.maxBufferSize),
-      })
+        events: batch,
+      });
+    }
+
+    // Reset queue when fully drained
+    if (this.queueHead >= this.eventQueue.length) {
+      this.eventQueue = [];
+      this.queueHead = 0;
     }
   }
 
@@ -205,8 +294,8 @@ export class DefaultReporter implements TraceReporter {
    * 任务完成后自动检查是否有新任务或新事件。
    */
   private pumpJobs(): void {
-    if (this.destroyed || !this.fetchImpl) {
-      return
+    if (this.state !== 'active' || !this.fetchImpl) {
+      return;
     }
 
     while (this.activeJobs < this.maxConcurrentRequests && this.jobQueue.length > 0) {
@@ -215,14 +304,20 @@ export class DefaultReporter implements TraceReporter {
         break
       }
 
-      this.activeJobs += 1
+      this.activeJobs += 1;
+      this.activeJobRefs.push(job);
+
       void this.sendJob(job).finally(() => {
-        this.activeJobs -= 1
+        this.activeJobs -= 1;
+        const idx = this.activeJobRefs.indexOf(job);
+        if (idx >= 0) {
+          this.activeJobRefs.splice(idx, 1);
+        }
 
         if (this.jobQueue.length > 0) {
-          this.pumpJobs()
-        } else if (this.eventQueue.length > 0) {
-          this.scheduleFlush(this.flushInterval)
+          this.pumpJobs();
+        } else if (this.eventQueue.length > this.queueHead && this.state === 'active') {
+          this.scheduleFlush(this.flushInterval);
         }
       })
     }
@@ -234,38 +329,78 @@ export class DefaultReporter implements TraceReporter {
    * @param job - 批量任务
    */
   private async sendJob(job: BatchJob): Promise<void> {
+    if (!this.fetchImpl) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
     try {
-      const response = await this.fetchImpl!(this.batchUrl, {
+      const response = await this.fetchImpl(this.batchUrl, {
         body: safeJsonStringify({ events: job.events }),
         headers: { 'content-type': CONTENT_TYPE_JSON },
         keepalive: true,
         method: 'POST',
-      })
+        signal: controller.signal,
+      });
 
-      if (!response.ok) {
-        throw new Error(`TraceGA report failed with status ${response.status}`)
+      if (response.ok) {
+        this.totalSent++;
+        return;
       }
+
+      if (this.state === 'active' && job.attempts < MAX_RETRY_ATTEMPTS && RETRYABLE_STATUSES.has(response.status)) {
+        this.scheduleRetry(job);
+        return;
+      }
+
+      this.totalFailed++;
+      this.handleError(new Error(`TraceGA report failed with status ${response.status}`), 'report.transport');
     } catch (error) {
-      if (!this.destroyed && job.attempts < MAX_RETRY_ATTEMPTS) {
-        const attempts = job.attempts + 1
-        this.jobQueue.push({ ...job, attempts })
-        return
+      if ((error as Error)?.name === 'AbortError') {
+        if (this.state === 'active' && job.attempts < MAX_RETRY_ATTEMPTS) {
+          this.scheduleRetry(job);
+          return;
+        }
       }
 
-      this.handleError(error, ERROR_CONTEXT.TRANSPORT)
+      if (this.state === 'active' && job.attempts < MAX_RETRY_ATTEMPTS) {
+        this.scheduleRetry(job);
+        return;
+      }
+
+      this.totalFailed++;
+      this.handleError(error, 'report.transport');
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
-  // ── 私有方法：定时器 ──────────────────────────────────
+  private scheduleRetry(job: BatchJob): void {
+    if (this.state !== 'active') {
+      return;
+    }
 
-  /**
-   * 安排延迟上报，已有定时器时跳过。
-   *
-   * @param delay - 延迟毫秒数
-   */
+    this.totalRetries++;
+    const delay = getRetryDelay(job.attempts);
+
+    const timerId = setTimeout(() => {
+      this.pendingRetries.delete(timerId);
+      if (this.state !== 'active') {
+        return;
+      }
+      const retryJob: BatchJob = { ...job, attempts: job.attempts + 1 };
+      this.jobQueue.push(retryJob);
+      this.pumpJobs();
+    }, delay);
+
+    this.pendingRetries.set(timerId, job);
+  }
+
   private scheduleFlush(delay: number): void {
-    if (this.destroyed || this.timer) {
-      return
+    if (this.state !== 'active' || this.timer) {
+      return;
     }
 
     this.timer = setTimeout(() => {
@@ -279,63 +414,98 @@ export class DefaultReporter implements TraceReporter {
     if (!this.timer) {
       return
     }
-
-    clearTimeout(this.timer)
-    this.timer = null
+    clearTimeout(this.timer);
+    this.timer = null;
   }
 
-  // ── 私有方法：页面生命周期 ────────────────────────────
-
-  /** pagehide 事件处理：尝试 sendBeacon 发送剩余事件 */
-  private readonly handlePageHide = (): void => {
-    this.flushWithBeacon()
-  }
-
-  /** visibilitychange 事件处理：页面隐藏时尝试 sendBeacon */
-  private readonly handleVisibilityChange = (): void => {
-    if (document.visibilityState === 'hidden') {
-      this.flushWithBeacon()
+  private removeLifecycleListeners(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', this.handlePageHide);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     }
   }
 
-  // ── 私有方法：Beacon 兜底 ─────────────────────────────
+  private dropOldestNormalEvent(): void {
+    this.droppedEvents++;
+    // Drop from the front of the queue (oldest)
+    if (this.eventQueue.length > this.queueHead) {
+      this.queueHead++;
+      // Compact periodically
+      if (this.queueHead > 100) {
+        this.eventQueue = this.eventQueue.slice(this.queueHead);
+        this.queueHead = 0;
+      }
+    }
+  }
+
+  private trySendBeaconForJob(job: BatchJob): boolean {
+    if (!this.canUseBeacon()) {
+      return false;
+    }
+
+    try {
+      const payload = safeJsonStringify({ events: job.events });
+      const body = new Blob([payload], { type: 'application/json' });
+      const result = navigator.sendBeacon(this.batchUrl, body);
+      if (result) {
+        this.totalSent++;
+      }
+      return result;
+    } catch {
+      return false;
+    }
+  }
+
+  private persistJob(job: BatchJob): void {
+    try {
+      const key = 'trace_failed_cache';
+      const existing = sessionStorage.getItem(key);
+      let cache: TrackEventData[] = [];
+      if (existing) {
+        try {
+          cache = JSON.parse(existing);
+        } catch {
+          // Corrupted cache, start fresh
+        }
+      }
+      cache.push(...job.events);
+      if (cache.length > 200) {
+        cache = cache.slice(-200);
+      }
+      sessionStorage.setItem(key, safeJsonStringify(cache));
+      this.persistedEvents += job.events.length;
+    } catch {
+      // Storage full or unavailable — event is lost
+      this.droppedEvents += job.events.length;
+    }
+  }
 
   /** 检查 sendBeacon 是否可用 */
   private canUseBeacon(): boolean {
     return typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function'
   }
 
-  /**
-   * 使用 sendBeacon 发送批量任务。
-   * 发送失败的任务保留在 jobQueue 中，等待后续定时上报。
-   */
-  private flushWithBeacon(): void {
-    if (this.destroyed || !this.canUseBeacon()) {
-      this.flush()
-      return
+  private readonly handlePageHide = (): void => {
+    if (this.state !== 'active') {
+      return;
     }
+    this.clearTimer();
+    this.createBatchJobs();
 
-    this.clearTimer()
-    this.createBatchJobs()
-
-    const unsentJobs: BatchJob[] = []
-    this.jobQueue.forEach(job => {
-      try {
-        const payload = safeJsonStringify({ events: job.events })
-        const body = new Blob([payload], { type: CONTENT_TYPE_JSON })
-
-        if (!navigator.sendBeacon(this.batchUrl, body)) {
-          unsentJobs.push(job)
-        }
-      } catch (error) {
-        unsentJobs.push(job)
-        this.handleError(error, ERROR_CONTEXT.BEACON)
+    const unsentJobs: BatchJob[] = [];
+    for (const job of this.jobQueue) {
+      if (!this.trySendBeaconForJob(job)) {
+        unsentJobs.push(job);
       }
-    })
-
-    this.jobQueue = unsentJobs
-    if (this.jobQueue.length > 0) {
-      this.scheduleFlush(this.flushInterval)
     }
-  }
+    this.jobQueue = unsentJobs;
+  };
+
+  private readonly handleVisibilityChange = (): void => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      this.handlePageHide();
+    }
+  };
 }
