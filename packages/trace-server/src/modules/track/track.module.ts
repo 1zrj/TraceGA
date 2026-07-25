@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common'
-import { TrackController } from './controllers/track.controller'
-import { TrackService } from './services/track.service'
-import { TrackRepository } from './repositories/track.repository'
+import { Module } from '@nestjs/common';
+import { TrackController } from './controllers/track.controller';
+import { TrackService } from './services/track.service';
+import { TrackRepository } from './repositories/track.repository';
 import {
   ClickEventProcessor,
   CustomEventProcessor,
@@ -11,8 +11,8 @@ import {
   PageViewProcessor,
   PerformanceEventProcessor,
   WhiteScreenProcessor,
-} from './processors/event.processor'
-import { JsonSchemaValidator } from './validators/json-schema.validator'
+} from './processors/event.processor';
+import { JsonSchemaValidator } from './validators/json-schema.validator';
 
 @Module({
   controllers: [TrackController],

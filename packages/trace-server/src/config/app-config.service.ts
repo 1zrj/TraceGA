@@ -1,22 +1,22 @@
-import { Injectable } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AppConfigService {
   constructor(private configService: ConfigService) {}
 
   get port(): number {
-    return this.configService.get<number>('PORT', 3000)
+    return this.configService.get<number>('PORT', 3000);
   }
 
   get nodeEnv(): string {
-    return this.configService.get<string>('NODE_ENV', 'development')
+    return this.configService.get<string>('NODE_ENV', 'development');
   }
 
   get database() {
     return {
       url: this.configService.get<string>('DATABASE_URL', ''),
-    }
+    };
   }
 
   get clickhouse() {
@@ -26,20 +26,20 @@ export class AppConfigService {
       username: this.configService.get<string>('CLICKHOUSE_USER', 'default'),
       password: this.configService.get<string>('CLICKHOUSE_PASSWORD', ''),
       database: this.configService.get<string>('CLICKHOUSE_DATABASE', 'tracega'),
-    }
+    };
   }
 
   get glm() {
     return {
       apiKey: this.configService.get<string>('GLM_API_KEY', ''),
       model: this.configService.get<string>('GLM_MODEL', 'glm-4-flash'),
-    }
+    };
   }
 
   get jwt() {
     return {
       secret: this.configService.get<string>('JWT_SECRET') ?? '',
       expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') ?? '7d',
-    }
+    };
   }
 }

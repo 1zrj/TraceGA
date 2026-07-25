@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common'
-import { Prisma } from '@generated/prisma'
-import { PrismaService } from '@/database/prisma.service'
-import { User } from '../entities/user.entity'
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@generated/prisma';
+import { PrismaService } from '@/database/prisma.service';
+import { User } from '../entities/user.entity';
 
 @Injectable()
 export class UserRepository {
@@ -10,22 +10,22 @@ export class UserRepository {
   async findByEmail(email: string): Promise<User | null> {
     const user = await this.prisma.user.findUnique({
       where: { email },
-    })
-    return user ? this.toUser(user) : null
+    });
+    return user ? this.toUser(user) : null;
   }
 
   async findByPhone(phone: string): Promise<User | null> {
     const user = await this.prisma.user.findUnique({
       where: { phone },
-    })
-    return user ? this.toUser(user) : null
+    });
+    return user ? this.toUser(user) : null;
   }
 
   async findById(id: string): Promise<User | null> {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(id) },
-    })
-    return user ? this.toUser(user) : null
+    });
+    return user ? this.toUser(user) : null;
   }
 
   async create(data: { username: string; email: string; phone: string; passwordHash: string; role?: string }): Promise<User> {
@@ -38,15 +38,15 @@ export class UserRepository {
         role: data.role ?? 'admin',
         status: 1,
       },
-    })
-    return this.toUser(user)
+    });
+    return this.toUser(user);
   }
 
   async updateLastLogin(id: string): Promise<void> {
     await this.prisma.user.update({
       where: { id: BigInt(id) },
       data: { last_login_at: new Date() },
-    })
+    });
   }
 
   private toUser(user: Prisma.userGetPayload<Record<string, never>>): User {
@@ -62,6 +62,6 @@ export class UserRepository {
       lastLoginAt: user.last_login_at,
       createdAt: user.created_at,
       updatedAt: user.updated_at,
-    }
+    };
   }
 }
