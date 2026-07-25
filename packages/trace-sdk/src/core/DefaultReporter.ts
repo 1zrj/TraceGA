@@ -1,9 +1,34 @@
-import type { EventPriority, ResolvedTraceConfig, TraceReporter, TrackEventData } from '../types';
-import { deepClone, safeJsonStringify } from '../utils';
+// ─── 导入 ───────────────────────────────────────────────────
 
+import type { EventPriority, ResolvedTraceConfig, TraceReporter, TrackEventData } from '../types'
+import { deepClone, safeJsonStringify } from '../utils'
+
+// ─── 常量 ───────────────────────────────────────────────────
+
+/** 批量上报端点后缀 */
+const BATCH_ENDPOINT = '/batch'
+
+/** 最大重试次数 */
+const MAX_RETRY_ATTEMPTS = 2
+
+/** JSON 内容类型 */
+const CONTENT_TYPE_JSON = 'application/json'
+
+/** 错误上下文标识 */
+const ERROR_CONTEXT = {
+  TRANSPORT: 'report.transport',
+  TRANSPORT_UNAVAILABLE: 'report.transport.unavailable',
+  BEACON: 'report.beacon',
+} as const
+
+// ─── 类型 ───────────────────────────────────────────────────
+
+/** 批量上报任务 */
 interface BatchJob {
-  attempts: number;
-  events: TrackEventData[];
+  /** 已重试次数 */
+  attempts: number
+  /** 待上报的事件列表 */
+  events: TrackEventData[]
 }
 
 type ReporterErrorHandler = (error: unknown, context: string) => void;
@@ -19,15 +44,22 @@ function getRetryDelay(attempts: number): number {
   return base * (0.5 + Math.random() * 0.5);
 }
 
+/**
+ * 根据上报地址构造批量上报 URL。
+ * 始终将 pathname 结尾替换为 `/batch`，移除 hash。
+ *
+ * @param reportUrl - 原始上报地址
+ * @returns 批量上报完整 URL
+ */
 function getBatchUrl(reportUrl: string): string {
-  const baseUrl = typeof window !== 'undefined' && window.location?.href ? window.location.href : 'http://tracega.local/';
-  const parsedUrl = new URL(reportUrl, baseUrl);
+  const baseUrl = typeof window !== 'undefined' && window.location?.href ? window.location.href : 'http://tracega.local/'
+  const parsedUrl = new URL(reportUrl, baseUrl)
 
-  if (!parsedUrl.pathname.endsWith('/batch')) {
-    parsedUrl.pathname = `${parsedUrl.pathname.replace(/\/$/, '')}/batch`;
+  if (!parsedUrl.pathname.endsWith(BATCH_ENDPOINT)) {
+    parsedUrl.pathname = `${parsedUrl.pathname.replace(/\/$/, '')}${BATCH_ENDPOINT}`
   }
-  parsedUrl.hash = '';
-  return parsedUrl.href;
+  parsedUrl.hash = ''
+  return parsedUrl.href
 }
 
 export interface ReporterMetrics {
@@ -68,20 +100,28 @@ export class DefaultReporter implements TraceReporter {
     config: Readonly<ResolvedTraceConfig>,
     private readonly handleError: ReporterErrorHandler,
   ) {
-    this.batchUrl = getBatchUrl(config.reportUrl);
-    this.maxBufferSize = config.maxBufferSize;
-    this.flushInterval = config.flushInterval;
-    this.maxConcurrentRequests = config.maxConcurrentRequests;
-    this.fetchImpl = this.captureFetch();
+    this.batchUrl = getBatchUrl(config.reportUrl)
+    this.maxBufferSize = config.maxBufferSize
+    this.flushInterval = config.flushInterval
+    this.maxConcurrentRequests = config.maxConcurrentRequests
+    this.fetchImpl = this.captureFetch()
 
     if (typeof window !== 'undefined') {
-      window.addEventListener('pagehide', this.handlePageHide);
+      window.addEventListener('pagehide', this.handlePageHide)
     }
     if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', this.handleVisibilityChange);
+      document.addEventListener('visibilitychange', this.handleVisibilityChange)
     }
   }
 
+  // ── 公有方法 ──────────────────────────────────────────
+
+  /**
+   * 接收一条埋点事件并加入队列。
+   *
+   * @param event    - 埋点事件数据
+   * @param priority - 事件优先级，urgent 时立即触发上报
+   */
   report(event: TrackEventData, priority: EventPriority): void {
     if (this.state !== 'active') {
       return;
@@ -89,10 +129,10 @@ export class DefaultReporter implements TraceReporter {
 
     if (!this.fetchImpl && !this.canUseBeacon()) {
       if (!this.transportUnavailableReported) {
-        this.transportUnavailableReported = true;
-        this.handleError(new Error('TraceGA reporting requires fetch or sendBeacon'), 'report.transport.unavailable');
+        this.transportUnavailableReported = true
+        this.handleError(new Error('TraceGA reporting requires fetch or sendBeacon'), ERROR_CONTEXT.TRANSPORT_UNAVAILABLE)
       }
-      return;
+      return
     }
 
     // Backpressure: drop oldest normal events when queue is full
@@ -108,17 +148,20 @@ export class DefaultReporter implements TraceReporter {
       return;
     }
 
-    this.scheduleFlush(this.flushInterval);
+    this.scheduleFlush(this.flushInterval)
   }
 
+  /**
+   * 手动触发上报，将当前队列中的事件分批发送。
+   */
   flush(): void {
     if (this.state !== 'active' || (!this.fetchImpl && !this.canUseBeacon())) {
       return;
     }
 
-    this.clearTimer();
-    this.createBatchJobs();
-    this.pumpJobs();
+    this.clearTimer()
+    this.createBatchJobs()
+    this.pumpJobs()
   }
 
   async destroy(): Promise<void> {
@@ -218,11 +261,16 @@ export class DefaultReporter implements TraceReporter {
 
   private captureFetch(): typeof fetch | null {
     if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
-      return window.fetch.bind(window);
+      return window.fetch.bind(window)
     }
-    return null;
+    return null
   }
 
+  // ── 私有方法：批量处理 ────────────────────────────────
+
+  /**
+   * 将事件队列按 maxBufferSize 拆分为批量任务。
+   */
   private createBatchJobs(): void {
     while (this.queueHead < this.eventQueue.length) {
       const end = Math.min(this.queueHead + this.maxBufferSize, this.eventQueue.length);
@@ -241,15 +289,19 @@ export class DefaultReporter implements TraceReporter {
     }
   }
 
+  /**
+   * 并发调度批量任务，受 maxConcurrentRequests 限制。
+   * 任务完成后自动检查是否有新任务或新事件。
+   */
   private pumpJobs(): void {
     if (this.state !== 'active' || !this.fetchImpl) {
       return;
     }
 
     while (this.activeJobs < this.maxConcurrentRequests && this.jobQueue.length > 0) {
-      const job = this.jobQueue.shift();
+      const job = this.jobQueue.shift()
       if (!job) {
-        break;
+        break
       }
 
       this.activeJobs += 1;
@@ -267,10 +319,15 @@ export class DefaultReporter implements TraceReporter {
         } else if (this.eventQueue.length > this.queueHead && this.state === 'active') {
           this.scheduleFlush(this.flushInterval);
         }
-      });
+      })
     }
   }
 
+  /**
+   * 发送单个批量任务，失败时自动重试。
+   *
+   * @param job - 批量任务
+   */
   private async sendJob(job: BatchJob): Promise<void> {
     if (!this.fetchImpl) {
       return;
@@ -282,7 +339,7 @@ export class DefaultReporter implements TraceReporter {
     try {
       const response = await this.fetchImpl(this.batchUrl, {
         body: safeJsonStringify({ events: job.events }),
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': CONTENT_TYPE_JSON },
         keepalive: true,
         method: 'POST',
         signal: controller.signal,
@@ -347,14 +404,15 @@ export class DefaultReporter implements TraceReporter {
     }
 
     this.timer = setTimeout(() => {
-      this.timer = null;
-      this.flush();
-    }, delay);
+      this.timer = null
+      this.flush()
+    }, delay)
   }
 
+  /** 清除定时器 */
   private clearTimer(): void {
     if (!this.timer) {
-      return;
+      return
     }
     clearTimeout(this.timer);
     this.timer = null;
@@ -424,8 +482,9 @@ export class DefaultReporter implements TraceReporter {
     }
   }
 
+  /** 检查 sendBeacon 是否可用 */
   private canUseBeacon(): boolean {
-    return typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function';
+    return typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function'
   }
 
   private readonly handlePageHide = (): void => {
