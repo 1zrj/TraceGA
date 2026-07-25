@@ -3,10 +3,10 @@ import { login as loginApi } from '@/api/auth'
 import type { LoginDto, LoginResult } from '@/types'
 
 interface UserInfo {
-  name: string
-  avatar?: string
-  username?: string
-  email?: string
+  username: string
+  email: string
+  role: string
+  avatar: string | null
 }
 
 interface AppState {
@@ -35,11 +35,11 @@ export const useAppStore = create<AppState>((set) => ({
 
   login: async (dto: LoginDto) => {
     const res = await loginApi(dto)
-    const userInfo = {
-      name: res.user.name,
-      avatar: res.user.avatar,
+    const userInfo: UserInfo = {
       username: res.user.username,
       email: res.user.email,
+      role: res.user.role,
+      avatar: res.user.avatar,
     }
     localStorage.setItem('token', res.token)
     localStorage.setItem('userInfo', JSON.stringify(userInfo))

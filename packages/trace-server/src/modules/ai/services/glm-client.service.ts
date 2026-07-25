@@ -1,15 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
-import { CircuitBreaker } from './circuit-breaker'
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { CircuitBreaker } from './circuit-breaker';
 
 /**
  * GLM API 调用参数
  */
 export interface GlmChatOptions {
   /** 温度，控制输出随机性，0-1，默认 0.3 */
-  temperature?: number
+  temperature?: number;
   /** 最大输出 token 数，默认 1024 */
-  maxTokens?: number
+  maxTokens?: number;
 }
 
 /**
@@ -17,13 +17,13 @@ export interface GlmChatOptions {
  */
 export interface GlmChatResult {
   /** AI 返回的文本内容 */
-  content: string
+  content: string;
   /** 本次调用消耗的 token 数（用于成本统计） */
   usage: {
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-  }
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }
 
 /**
@@ -34,22 +34,22 @@ export interface GlmChatResult {
  */
 @Injectable()
 export class GlmClientService {
-  private readonly logger = new Logger(GlmClientService.name)
+  private readonly logger = new Logger(GlmClientService.name);
 
   /** GLM API 地址 */
-  private readonly apiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'
+  private readonly apiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 
   /** 请求超时时间（毫秒） */
-  private readonly timeout = 15_000
+  private readonly timeout = 15_000;
 
   /** 失败后最多重试次数 */
-  private readonly maxRetries = 1
+  private readonly maxRetries = 1;
 
   /** 熔断器：连续 5 次失败后熔断 30 秒 */
   private readonly circuitBreaker = new CircuitBreaker('GLM', {
     failureThreshold: 5,
     cooldownMs: 30_000,
-  })
+  });
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -62,42 +62,42 @@ export class GlmClientService {
    * @returns             AI 返回的文本 + token 用量
    */
   async chat(systemPrompt: string, userPrompt: string, options: GlmChatOptions = {}): Promise<GlmChatResult> {
-    const { temperature = 0.3, maxTokens = 1024 } = options
+    const { temperature = 0.3, maxTokens = 1024 } = options;
 
-    const apiKey = this.configService.get<string>('GLM_API_KEY', '')
-    const model = this.configService.get<string>('GLM_MODEL', 'glm-4-flash')
+    const apiKey = this.configService.get<string>('GLM_API_KEY', '');
+    const model = this.configService.get<string>('GLM_MODEL', 'glm-4-flash');
 
     if (!apiKey) {
-      throw new Error('GLM_API_KEY 未配置，请在环境变量中设置 GLM_API_KEY')
+      throw new Error('GLM_API_KEY 未配置，请在环境变量中设置 GLM_API_KEY');
     }
 
     // 通过熔断器保护：连续失败 5 次后快速拒绝，30 秒后自动恢复
     return await this.circuitBreaker.call(async () => {
       // 带重试的调用
-      let lastError: Error | null = null
+      let lastError: Error | null = null;
       for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
         try {
-          return await this.doRequest(apiKey, model, systemPrompt, userPrompt, temperature, maxTokens)
+          return await this.doRequest(apiKey, model, systemPrompt, userPrompt, temperature, maxTokens);
         } catch (err) {
-          lastError = err instanceof Error ? err : new Error(String(err))
+          lastError = err instanceof Error ? err : new Error(String(err));
 
           // 4xx 错误（如 401 API Key 错误、429 限流）不重试，重试也没用
           if (this.isClientError(err)) {
-            throw lastError
+            throw lastError;
           }
 
           // 最后一次尝试也失败了，抛出错误
           if (attempt >= this.maxRetries) {
-            throw lastError
+            throw lastError;
           }
 
-          this.logger.warn(`GLM 调用失败，正在进行第 ${attempt + 1} 次重试...`, lastError.message)
+          this.logger.warn(`GLM 调用失败，正在进行第 ${attempt + 1} 次重试...`, lastError.message);
         }
       }
 
       // 理论上不会走到这里，但 TypeScript 需要
-      throw lastError
-    })
+      throw lastError;
+    });
   }
 
   /**
@@ -110,17 +110,17 @@ export class GlmClientService {
    * 不包含熔断器保护 —— 熔断由非流式调用负责累积计数。
    */
   async *chatStream(systemPrompt: string, userPrompt: string, options: GlmChatOptions = {}): AsyncGenerator<string> {
-    const { temperature = 0.3, maxTokens = 1024 } = options
+    const { temperature = 0.3, maxTokens = 1024 } = options;
 
-    const apiKey = this.configService.get<string>('GLM_API_KEY', '')
-    const model = this.configService.get<string>('GLM_MODEL', 'glm-4-flash')
+    const apiKey = this.configService.get<string>('GLM_API_KEY', '');
+    const model = this.configService.get<string>('GLM_MODEL', 'glm-4-flash');
 
     if (!apiKey) {
-      throw new Error('GLM_API_KEY 未配置，请在环境变量中设置 GLM_API_KEY')
+      throw new Error('GLM_API_KEY 未配置，请在环境变量中设置 GLM_API_KEY');
     }
 
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
       const response = await fetch(this.apiUrl, {
@@ -140,36 +140,36 @@ export class GlmClientService {
           stream: true,
         }),
         signal: controller.signal,
-      })
+      });
 
       if (!response.ok) {
-        const errorBody = await response.text().catch(() => '无法读取响应体')
-        throw new Error(`GLM API 返回错误 [${response.status}]: ${errorBody}`)
+        const errorBody = await response.text().catch(() => '无法读取响应体');
+        throw new Error(`GLM API 返回错误 [${response.status}]: ${errorBody}`);
       }
 
       // 逐行读取 SSE 流
-      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
 
-      let buffer = ''
+      let buffer = '';
       while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+        const { done, value } = await reader.read();
+        if (done) break;
 
-        buffer += value
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // 最后一段可能不完整，留到下次
+        buffer += value;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // 最后一段可能不完整，留到下次
 
         for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed || !trimmed.startsWith('data: ')) continue
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
 
-          const data = trimmed.slice(6) // 去掉 "data: " 前缀
-          if (data === '[DONE]') return
+          const data = trimmed.slice(6); // 去掉 "data: " 前缀
+          if (data === '[DONE]') return;
 
           try {
-            const parsed = JSON.parse(data)
-            const content: string = parsed?.choices?.[0]?.delta?.content || ''
-            if (content) yield content
+            const parsed = JSON.parse(data);
+            const content: string = parsed?.choices?.[0]?.delta?.content || '';
+            if (content) yield content;
           } catch {
             // 个别行解析失败跳过（非关键）
           }
@@ -177,19 +177,19 @@ export class GlmClientService {
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error(`GLM API 请求超时（${this.timeout / 1000}秒）`)
+        throw new Error(`GLM API 请求超时（${this.timeout / 1000}秒）`);
       }
-      throw err
+      throw err;
     } finally {
-      clearTimeout(timeoutId)
+      clearTimeout(timeoutId);
     }
   }
   private async doRequest(apiKey: string, model: string, systemPrompt: string, userPrompt: string, temperature: number, maxTokens: number): Promise<GlmChatResult> {
-    const startTime = Date.now()
+    const startTime = Date.now();
 
     // 创建 AbortController 用于超时控制
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
       const response = await fetch(this.apiUrl, {
@@ -209,42 +209,45 @@ export class GlmClientService {
           stream: false,
         }),
         signal: controller.signal,
-      })
+      });
 
       // 处理 HTTP 错误状态码
       if (!response.ok) {
-        const errorBody = await response.text().catch(() => '无法读取响应体')
-        const error = new Error(`GLM API 返回错误 [${response.status}]: ${errorBody}`)
+        const errorBody = await response.text().catch(() => '无法读取响应体');
+        const error = new Error(`GLM API 返回错误 [${response.status}]: ${errorBody}`);
         // 把状态码挂到 error 上，方便上层判断是否需要重试
-        ;(error as any).statusCode = response.status
-        throw error
+        (error as any).statusCode = response.status;
+        throw error;
       }
 
       // 解析成功响应
-      const data = await response.json()
-      const content: string = data?.choices?.[0]?.message?.content || ''
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+      };
+      const content: string = data?.choices?.[0]?.message?.content || '';
 
       // 从 GLM 返回中提取 token 用量
       const usage = {
         promptTokens: data?.usage?.prompt_tokens ?? 0,
         completionTokens: data?.usage?.completion_tokens ?? 0,
         totalTokens: data?.usage?.total_tokens ?? 0,
-      }
+      };
 
-      const elapsed = Date.now() - startTime
+      const elapsed = Date.now() - startTime;
       this.logger.log(
         `GLM 调用成功 | 模型=${model} | 耗时=${elapsed}ms | ` + `tokens: prompt=${usage.promptTokens} completion=${usage.completionTokens} total=${usage.totalTokens}`,
-      )
+      );
 
-      return { content, usage }
+      return { content, usage };
     } catch (err) {
       // AbortController 触发的超时错误
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error(`GLM API 请求超时（${this.timeout / 1000}秒）`)
+        throw new Error(`GLM API 请求超时（${this.timeout / 1000}秒）`);
       }
-      throw err
+      throw err;
     } finally {
-      clearTimeout(timeoutId)
+      clearTimeout(timeoutId);
     }
   }
 
@@ -252,7 +255,7 @@ export class GlmClientService {
    * 判断是否是客户端错误（4xx），这类错误不应该重试
    */
   private isClientError(err: unknown): boolean {
-    const statusCode = (err as any)?.statusCode
-    return typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500
+    const statusCode = (err as any)?.statusCode;
+    return typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500;
   }
 }

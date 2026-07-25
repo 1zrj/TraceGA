@@ -20,11 +20,16 @@ export const createEvent = (data: {
   return request.post<{ id: string; createdAt: string }>('/events', data)
 }
 
-export const updateEvent = (id: string, data: {
-  eventName?: string
-  description?: string
-  propertySchema?: Record<string, unknown>
-}) => {
+export const updateEvent = (
+  id: string,
+  data: {
+    eventName?: string
+    eventType?: string
+    category?: string
+    description?: string
+    propertySchema?: Record<string, unknown>
+  },
+) => {
   return request.put<{ id: string; updatedAt: string }>(`/events/${id}`, data)
 }
 

@@ -43,9 +43,8 @@ export const ProfilePage: React.FC = () => {
           />
           <div>
             <Title level={4} style={{ margin: 0 }}>
-              {userInfo?.name || '用户'}
+              {userInfo?.username || '用户'}
             </Title>
-            <Typography.Text type="secondary">{userInfo?.username || '-'}</Typography.Text>
           </div>
         </div>
       </Card>
@@ -54,7 +53,6 @@ export const ProfilePage: React.FC = () => {
       <Card title="账号信息" style={{ marginBottom: 24 }}>
         <Descriptions column={1} labelStyle={{ width: 120 }}>
           <Descriptions.Item label="用户名">{userInfo?.username || '-'}</Descriptions.Item>
-          <Descriptions.Item label="显示名称">{userInfo?.name || '-'}</Descriptions.Item>
           <Descriptions.Item label="邮箱">{userInfo?.email || '未设置'}</Descriptions.Item>
           <Descriptions.Item label="角色">Admin</Descriptions.Item>
         </Descriptions>

@@ -21,6 +21,7 @@ import {
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet, Link } from 'react-router-dom'
 import { useAppStore } from '@/store/useAppStore'
+import { AiAssistantPanel } from '@/features/dashboard/components/AiAssistantPanel'
 import { cn, cnVar } from '@/utils/cn'
 import type { Variant } from '@/tokens'
 
@@ -355,7 +356,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                       color: darkMode ? 'rgba(255,255,255,0.85)' : '#475569',
                     }}
                   >
-                    {userInfo?.name ?? '用户'}
+                    {userInfo?.username ?? '用户'}
                   </Text>
                 </Space>
               </Dropdown>
@@ -414,7 +415,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {userInfo?.name ?? '用户'}
+                    {userInfo?.username ?? '用户'}
                   </span>
                 ))}
               </div>
@@ -439,6 +440,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           )}
         </Layout>
       </Layout>
+      <AiAssistantPanel />
     </div>
   )
 }

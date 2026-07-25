@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Button, Input, Drawer, Spin, Empty, Typography } from 'antd'
 import {
   MessageOutlined,
@@ -6,9 +6,9 @@ import {
   RobotOutlined,
   UserOutlined,
   CloseOutlined,
+  StopOutlined,
 } from '@ant-design/icons'
-import { analyze } from '@/api'
-import type { AiAnalysisResult } from '@/types'
+import { analyzeStream } from '@/api'
 
 const { Text } = Typography
 const { TextArea } = Input
@@ -23,21 +23,13 @@ interface Message {
 let msgCounter = 0
 const uid = () => `ai_msg_${++msgCounter}`
 
-// ─── 格式化 AI 返回结果为显示文本 ──────────────────────────
-function formatResult(result: AiAnalysisResult): string {
-  let text = `▎分析结论\n${result.conclusion}\n`
-  if (result.suggestions?.length) {
-    text += `\n▎建议\n${result.suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
-  }
-  return text
-}
-
 // ─── 组件 ─────────────────────────────────────────────────
 export const AiAssistantPanel: React.FC = () => {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
   // 新消息时自动滚动到底部
@@ -47,36 +39,55 @@ export const AiAssistantPanel: React.FC = () => {
     }
   }, [messages, loading])
 
-  const handleSend = async () => {
+  const handleStop = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setLoading(false)
+  }, [])
+
+  const handleSend = useCallback(async () => {
     const text = input.trim()
     if (!text || loading) return
 
     const userMsg: Message = { id: uid(), role: 'user', content: text }
-    setMessages((prev) => [...prev, userMsg])
+    const assistantId = uid()
+    setMessages((prev) => [...prev, userMsg, { id: assistantId, role: 'assistant', content: '' }])
     setInput('')
-
     setLoading(true)
+
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
-      const res = await analyze({ prompt: text, question: text })
-      setMessages((prev) => [
-        ...prev,
-        { id: uid(), role: 'assistant', content: formatResult(res) },
-      ])
-    } catch {
-      // 网络/服务端错误由 request.ts 拦截器统一弹 message.error
-      // 这里在对话中也展示一条提示，方便用户感知
-      setMessages((prev) => [
-        ...prev,
+      await analyzeStream(
+        { prompt: text, question: text },
         {
-          id: uid(),
-          role: 'assistant',
-          content: '抱歉，AI 分析服务暂不可用，请稍后重试。',
+          onText: (chunk) => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId ? { ...msg, content: msg.content + chunk } : msg,
+              ),
+            )
+          },
+          onError: (message) => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantId
+                  ? { ...msg, content: msg.content || `抱歉，${message}` }
+                  : msg,
+              ),
+            )
+          },
         },
-      ])
+        controller.signal,
+      )
+    } catch {
+      // AbortError 或其他异常，不额外处理
     } finally {
       setLoading(false)
+      abortRef.current = null
     }
-  }
+  }, [input, loading])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -84,6 +95,13 @@ export const AiAssistantPanel: React.FC = () => {
       handleSend()
     }
   }
+
+  // 清理流式请求
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+    }
+  }, [])
 
   return (
     <>
@@ -117,9 +135,7 @@ export const AiAssistantPanel: React.FC = () => {
         open={open}
         onClose={() => setOpen(false)}
         styles={{ body: { display: 'flex', flexDirection: 'column', padding: 0 } }}
-        extra={
-          <Button type="text" icon={<CloseOutlined />} onClick={() => setOpen(false)} />
-        }
+        extra={<Button type="text" icon={<CloseOutlined />} onClick={() => setOpen(false)} />}
       >
         {/* 消息列表 */}
         <div
@@ -187,50 +203,21 @@ export const AiAssistantPanel: React.FC = () => {
                   fontSize: 14,
                 }}
               >
-                <Text
-                  style={{
-                    color: msg.role === 'user' ? '#fff' : '#1e293b',
-                    whiteSpace: 'pre-wrap',
-                  }}
-                >
-                  {msg.content}
-                </Text>
+                {msg.role === 'assistant' && msg.content === '' ? (
+                  <Spin size="small" />
+                ) : (
+                  <Text
+                    style={{
+                      color: msg.role === 'user' ? '#fff' : '#1e293b',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {msg.content}
+                  </Text>
+                )}
               </div>
             </div>
           ))}
-
-          {/* 加载中 */}
-          {loading && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: '#e2e8f0',
-                  flexShrink: 0,
-                }}
-              >
-                <RobotOutlined style={{ color: '#475569' }} />
-              </div>
-              <div
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 12,
-                  background: '#fff',
-                  border: '1px solid #e2e8f0',
-                }}
-              >
-                <Spin size="small" />
-                <span style={{ marginLeft: 8, color: '#94a3b8', fontSize: 14 }}>
-                  AI 正在分析...
-                </span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* 输入区域 */}
@@ -250,7 +237,12 @@ export const AiAssistantPanel: React.FC = () => {
             disabled={loading}
             style={{ marginBottom: 8, resize: 'none' }}
           />
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            {loading && (
+              <Button icon={<StopOutlined />} onClick={handleStop}>
+                停止
+              </Button>
+            )}
             <Button
               type="primary"
               icon={<SendOutlined />}

@@ -6,7 +6,15 @@ import { ProfilePage } from '@/pages/Profile'
 import { HomePage } from '@/pages/Home'
 import { EventList } from '@/features/event-management/pages/EventList'
 import { Dashboard } from '@/features/dashboard/pages/Dashboard'
-import { HomeOutlined, ThunderboltOutlined, DashboardOutlined } from '@ant-design/icons'
+import { AlarmList } from '@/features/alarm/pages/AlarmList'
+import AiPage from '@/features/ai/pages/AiPage'
+import {
+  HomeOutlined,
+  ThunderboltOutlined,
+  DashboardOutlined,
+  BellOutlined,
+  RobotOutlined,
+} from '@ant-design/icons'
 import type { MenuItem } from '@/components/layout/AppLayout'
 
 const menuItems: MenuItem[] = [
@@ -24,6 +32,16 @@ const menuItems: MenuItem[] = [
     key: '/dashboard',
     label: '数据看板',
     icon: <DashboardOutlined />,
+  },
+  {
+    key: '/alarm',
+    label: '告警管理',
+    icon: <BellOutlined />,
+  },
+  {
+    key: '/ai',
+    label: 'AI 分析',
+    icon: <RobotOutlined />,
   },
 ]
 
@@ -54,6 +72,14 @@ const router = createBrowserRouter([
       {
         path: '/dashboard',
         element: <Dashboard />,
+      },
+      {
+        path: '/alarm',
+        element: <AlarmList />,
+      },
+      {
+        path: '/ai',
+        element: <AiPage />,
       },
       {
         path: '/profile',

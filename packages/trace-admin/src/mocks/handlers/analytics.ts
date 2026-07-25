@@ -50,6 +50,18 @@ export const analyticsHandlers = [
       ],
     })
   }),
+  http.post('/api/analysis/filter', () => {
+    return HttpResponse.json({
+      code: 200,
+      message: 'success',
+      data: [
+        { event_name: 'page_view', count: 4500 },
+        { event_name: 'button_click', count: 2800 },
+        { event_name: 'form_submit', count: 1200 },
+        { event_name: 'api_call', count: 980 },
+      ],
+    })
+  }),
   http.get('/api/analytics/overview', () => {
     return HttpResponse.json({
       code: 200,

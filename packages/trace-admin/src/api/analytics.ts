@@ -2,14 +2,29 @@ import request from '@/utils/request'
 import type {
   AnalyticsOverview,
   AnalysisSummary,
+  AnalysisSummaryDto,
+  AnalysisTrendItem,
+  AnalysisTrendDto,
+  AnalysisFilterDto,
+  AnalysisFilterItem,
   EventTrend,
   TopEvent,
   EventTypeTrendItem,
 } from '@/types'
 
 /** 获取分析概览（首页 PV/UV/人均访问次数） */
-export const getSummary = (params: { startTime?: string; endTime?: string }) => {
+export const getSummary = (params?: AnalysisSummaryDto) => {
   return request.get<AnalysisSummary>('/analysis/summary', { params })
+}
+
+/** 获取趋势数据 */
+export const getAnalysisTrend = (params?: AnalysisTrendDto) => {
+  return request.get<AnalysisTrendItem[]>('/analysis/trend', { params })
+}
+
+/** 筛选查询 */
+export const postAnalysisFilter = (data: AnalysisFilterDto) => {
+  return request.post<AnalysisFilterItem[]>('/analysis/filter', data)
 }
 
 export const getOverview = (params: { startTime?: string; endTime?: string }) => {

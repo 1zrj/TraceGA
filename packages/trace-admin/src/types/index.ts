@@ -1,11 +1,57 @@
+// ─── 通用分页类型 ─────────────────────────────────────────
+
+export interface PagedResponse<T> {
+  list: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+// ─── 事件类型 ────────────────────────────────────────────
+
 export interface Event {
+  id: string
+  eventName: string
+  eventType: string
+  category: string
+  appId: string
+  description?: string
+  propertySchema?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EventQueryDto {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  eventType?: string
+  appId?: string
+  startTime?: string
+  endTime?: string
+}
+
+// ─── 告警类型 ────────────────────────────────────────────
+
+export interface AlarmItem {
   id: string
   name: string
   type: string
-  timestamp: string
-  properties: Record<string, unknown>
-  userId?: string
-  sessionId?: string
+  level: string
+  status: string
+  appId: string
+  rule: string
+  notifyChannels: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AlarmQueryDto {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  status?: string
+  level?: string
 }
 
 export interface PageInfo {
@@ -66,20 +112,40 @@ export interface FilterItem {
 // ─── Auth 类型 ─────────────────────────────────────────────
 
 export interface LoginDto {
-  username: string
+  email: string
   password: string
+}
+
+/** 后端 UserWithoutPassword 类型 */
+export interface UserProfile {
+  id: string
+  username: string
+  email: string
+  phone: string
+  role: string
+  avatar: string | null
+  status: number
+  lastLoginAt: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface LoginResult {
   token: string
-  user: {
-    id: string
-    username: string
-    name: string
-    avatar?: string
-    email?: string
-  }
+  user: UserProfile
 }
+
+export interface RegisterDto {
+  username: string
+  email: string
+  phone: string
+  password: string
+  role?: string
+}
+
+export type RegisterResult = LoginResult
+
+export type ProfileResult = UserProfile
 
 // ─── AI 类型 ───────────────────────────────────────────────
 
@@ -187,4 +253,40 @@ export interface RecommendResult {
   recommendations: Recommendation[]
   generatedAt: string
   error?: string
+}
+
+// ─── Analysis 类型（/analysis 路由） ──────────────────────
+
+export interface AnalysisSummaryDto {
+  appId?: string
+  startTime?: string
+  endTime?: string
+}
+
+export interface AnalysisTrendDto {
+  appId?: string
+  eventType?: string
+  startTime?: string
+  endTime?: string
+  interval?: string
+}
+
+export interface AnalysisTrendItem {
+  time: string
+  pv: number
+  count?: number
+}
+
+export interface AnalysisFilterDto {
+  appId?: string
+  eventTypes?: string[]
+  startTime?: string
+  endTime?: string
+  filters?: Record<string, any>[]
+}
+
+export interface AnalysisFilterItem {
+  event_name: string
+  count: number
+  [key: string]: unknown
 }

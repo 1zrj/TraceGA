@@ -68,10 +68,13 @@ export const LoginPage: React.FC = () => {
             onFinish={onFinish}
             layout="vertical"
             size="large"
-            initialValues={{ username: 'admin', password: 'admin' }}
+            initialValues={{ email: 'admin@tracega.com', password: 'admin' }}
           >
-            <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
-              <Input prefix={<UserOutlined />} placeholder="用户名" />
+            <Form.Item
+              name="email"
+              rules={[{ required: true, type: 'email', message: '请输入邮箱地址' }]}
+            >
+              <Input prefix={<UserOutlined />} placeholder="邮箱地址" />
             </Form.Item>
 
             <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]}>

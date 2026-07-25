@@ -79,7 +79,7 @@ export const MainLayout: React.FC = () => {
               <MenuFoldOutlined style={{ fontSize: 20, color: '#64748b' }} />
             )}
           </button>
-          <span style={{ fontSize: 14, color: '#475569' }}>{userInfo?.name}</span>
+          <span style={{ fontSize: 14, color: '#475569' }}>{userInfo?.username}</span>
         </Header>
         <Content
           style={{
@@ -97,4 +97,3 @@ export const MainLayout: React.FC = () => {
     </Layout>
   )
 }
-

@@ -11,3 +11,4 @@ allowBuilds:
   prisma: true
   sqlite3: false
   bcrypt: true
+shamefullyHoist: true
