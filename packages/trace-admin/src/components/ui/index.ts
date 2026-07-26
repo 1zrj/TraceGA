@@ -25,3 +25,6 @@ export type {
   AppTableRequestParams,
   AppTableRequestResult,
 } from './AppTable'
+
+export { StatCard } from '../StatCard'
+export type { StatCardProps } from '../StatCard'

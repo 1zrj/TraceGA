@@ -45,6 +45,23 @@ export interface EventTypeTrendItem {
   count: number
 }
 
+/** 通用分页请求参数 */
+export interface PaginationParams {
+  page: number
+  pageSize: number
+  sortField?: string
+  sortOrder?: string
+}
+
+/** 通用筛选配置项 */
+export interface FilterConfig {
+  key: string
+  label: string
+  type: 'input' | 'select' | 'date' | 'dateRange'
+  options?: { value: string; label: string }[]
+  placeholder?: string
+}
+
 export interface FilterItem {
   key: string
   label: string
