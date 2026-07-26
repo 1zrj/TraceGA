@@ -6,9 +6,22 @@ import { Responsive, WidthProvider } from 'react-grid-layout/legacy'
 import type { Layout, ResponsiveLayouts } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
-import { getOverview, getEventTrend, getTopEvents, getEventTypeTrend } from '@/api'
-import type { AnalyticsOverview, EventTrend, TopEvent, EventTypeTrendItem } from '@/types'
-import { StatCard } from '@/components'
+import {
+  getOverview,
+  getEventTrend,
+  getTopEvents,
+  getEventTypeTrend,
+  getErrorEvents,
+  getErrorTrend,
+} from '@/api'
+import type {
+  AnalyticsOverview,
+  EventTrend,
+  TopEvent,
+  EventTypeTrendItem,
+  ErrorEventItem,
+} from '@/types'
+import { StatCard, ErrorEventCard } from '@/components'
 import './Dashboard.css'
 
 const ResponsiveGridLayout = WidthProvider(Responsive)
@@ -19,10 +32,11 @@ const STORAGE_KEY = 'tracega-dashboard-layout'
 const DEFAULT_LAYOUTS: ResponsiveLayouts = {
   lg: [
     { i: 'stats', x: 0, y: 0, w: 12, h: 3, static: true },
-    { i: 'trend', x: 0, y: 3, w: 6, h: 8, minW: 4, minH: 4 },
-    { i: 'pie', x: 6, y: 3, w: 6, h: 8, minW: 3, minH: 4 },
-    { i: 'type-trend', x: 0, y: 11, w: 7, h: 9, minW: 4, minH: 4 },
-    { i: 'funnel', x: 7, y: 11, w: 5, h: 9, minW: 3, minH: 4 },
+    { i: 'error-events', x: 0, y: 3, w: 12, h: 6.5, minW: 4, minH: 4 },
+    { i: 'trend', x: 0, y: 13, w: 6, h: 8, minW: 4, minH: 4 },
+    { i: 'pie', x: 6, y: 13, w: 6, h: 8, minW: 3, minH: 4 },
+    { i: 'type-trend', x: 0, y: 21, w: 7, h: 9, minW: 4, minH: 4 },
+    { i: 'funnel', x: 7, y: 21, w: 5, h: 9, minW: 3, minH: 4 },
   ],
 }
 
@@ -53,7 +67,10 @@ export const Dashboard: React.FC = () => {
   const [eventTrend, setEventTrend] = useState<EventTrend[]>([])
   const [topEvents, setTopEvents] = useState<TopEvent[]>([])
   const [eventTypeTrend, setEventTypeTrend] = useState<EventTypeTrendItem[]>([])
+  const [errorEvents, setErrorEvents] = useState<ErrorEventItem[]>([])
+  const [errorTrend, setErrorTrend] = useState<EventTrend[]>([])
   const [loading, setLoading] = useState(true)
+  const [errorLoading, setErrorLoading] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
   const [resetKey, setResetKey] = useState(0)
   const [chartKey, setChartKey] = useState(0)
@@ -81,6 +98,39 @@ export const Dashboard: React.FC = () => {
       }
     }
     fetchData()
+  }, [])
+
+  /** 获取错误事件数据 */
+  const fetchErrorEvents = useCallback(async () => {
+    setErrorLoading(true)
+    try {
+      const [eventsRes, trendRes] = await Promise.all([getErrorEvents({}), getErrorTrend({})])
+      setErrorEvents(eventsRes)
+      setErrorTrend(trendRes)
+    } catch (error) {
+      console.error('Failed to fetch error events:', error)
+      setErrorEvents([])
+      setErrorTrend([])
+    } finally {
+      setErrorLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchErrorEvents()
+  }, [fetchErrorEvents])
+
+  /** 查看错误详情 */
+  const handleViewErrorDetail = useCallback((item: ErrorEventItem) => {
+    // TODO: 后续可接入详情弹窗或跳转
+    console.log('查看错误详情:', item)
+  }, [])
+
+  /** 忽略错误 */
+  const handleIgnoreError = useCallback((item: ErrorEventItem) => {
+    setErrorEvents((prev) =>
+      prev.map((e) => (e.id === item.id ? { ...e, status: 'ignored' as const } : e)),
+    )
   }, [])
 
   // 数据加载完成后，递增 chartKey 强制图表组件重新挂载，
@@ -150,7 +200,7 @@ export const Dashboard: React.FC = () => {
     }
   }, [topEvents])
 
-  // 事件类型趋势折线图：将 EventTypeTrendItem[] 按 type 分组为多系列平滑折线
+  // 事件类型趋势折线图：将 EventTypeTrendItem[] 按 type 分组为多系列平滑折线，叠加错误事件总和曲线
   const typeTrendOption = useMemo(() => {
     const times = [...new Set(eventTypeTrend.map((d) => d.time))]
     const types = [...new Set(eventTypeTrend.map((d) => d.type))]
@@ -176,6 +226,29 @@ export const Dashboard: React.FC = () => {
         return item?.count ?? 0
       }),
     }))
+
+    // 追加错误事件总和曲线（使用虚线 + 菱形标记以明显区分）
+    const errorTrendData = times.map((t) => {
+      const item = errorTrend.find((d) => d.time === t)
+      return item?.count ?? 0
+    })
+    series.push({
+      name: '错误事件总和',
+      type: 'line' as const,
+      smooth: true,
+      symbol: 'diamond',
+      symbolSize: 10,
+      emphasis: { focus: 'series' as const },
+      itemStyle: { color: '#ff0000ff' },
+      lineStyle: { width: 3 },
+      label: {
+        show: true,
+        position: 'top' as const,
+        fontSize: 11,
+        color: '#ff6b6b',
+      },
+      data: errorTrendData,
+    })
     return {
       tooltip: {
         trigger: 'axis' as const,
@@ -202,7 +275,7 @@ export const Dashboard: React.FC = () => {
       },
       series,
     }
-  }, [eventTypeTrend])
+  }, [eventTypeTrend, errorTrend])
 
   if (loading) {
     return (
@@ -215,6 +288,13 @@ export const Dashboard: React.FC = () => {
   const trendOption = {
     tooltip: {
       trigger: 'axis' as const,
+    },
+    legend: {
+      top: 0,
+      icon: 'roundRect',
+      itemWidth: 14,
+      itemHeight: 4,
+      selected: { 错误事件数: false },
     },
     xAxis: {
       type: 'category' as const,
@@ -230,6 +310,14 @@ export const Dashboard: React.FC = () => {
         data: eventTrend.map((item) => item.count),
         itemStyle: {
           color: '#3b82f6',
+        },
+      },
+      {
+        name: '错误事件数',
+        type: 'bar' as const,
+        data: errorTrend.map((item) => item.count),
+        itemStyle: {
+          color: '#ef4444',
         },
       },
     ],
@@ -301,7 +389,6 @@ export const Dashboard: React.FC = () => {
           </Button>
         </div>
       </div>
-
       {/* 可拖拽缩放网格 */}
       <ResponsiveGridLayout
         className="layout"
@@ -338,7 +425,16 @@ export const Dashboard: React.FC = () => {
             </Col>
           </Row>
         </div>
-
+        {/* 错误事件卡片 */}
+        <div key="error-events" style={{ height: '100%' }}>
+          <ErrorEventCard
+            data={errorEvents}
+            loading={errorLoading}
+            onRefresh={fetchErrorEvents}
+            onViewDetail={handleViewErrorDetail}
+            onIgnore={handleIgnoreError}
+          />
+        </div>
         {/* 事件趋势图 */}
         <div key="trend" style={{ height: '100%' }}>
           <Card

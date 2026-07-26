@@ -52,3 +52,15 @@ export interface FilterItem {
   options?: { value: string; label: string }[]
   placeholder?: string
 }
+
+/** 错误事件（对应 trace-sdk ErrorPayloadBase + 前端扩展字段） */
+export interface ErrorEventItem {
+  id: string
+  type: string
+  message: string
+  errorName: string
+  occurredAt: string
+  duration?: number
+  url?: string
+  status: 'active' | 'resolved' | 'ignored'
+}
