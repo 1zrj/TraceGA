@@ -10,10 +10,7 @@
  * matchPermission(['*'], 'anything.at.all')                   // → true
  * matchPermission(['analytics.dashboard.*'], 'analytics.events.read') // → false
  */
-export function matchPermission(
-  userPermissions: string[],
-  required: string,
-): boolean {
+export function matchPermission(userPermissions: string[], required: string): boolean {
   return userPermissions.some((perm) => {
     // 全局通配
     if (perm === '*') return true

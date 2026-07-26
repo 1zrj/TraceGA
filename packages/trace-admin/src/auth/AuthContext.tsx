@@ -2,19 +2,11 @@
 // 提供 AuthProvider + useAuth hook
 // 从 localStorage token 恢复用户，从 roles 推导 permissions
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-} from 'react'
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { matchPermission } from './rbac'
 import { ROLE_PERMISSIONS, DEFAULT_PERMISSIONS } from './permissions'
 import { notifyError } from '@/components/feedback/notification'
-
 
 interface UserInfo {
   id: string
@@ -41,7 +33,6 @@ interface AuthContextValue extends AuthState {
   logout: () => void
 }
 
-
 interface TokenPayload {
   user: string
   roles: string[]
@@ -60,9 +51,7 @@ function parseToken(token: string): TokenPayload | null {
   }
 }
 
-
 const AuthContext = createContext<AuthContextValue>(null!)
-
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null)
@@ -94,22 +83,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 从 roles 推导 permissions
   const permissions = useMemo(() => {
     if (!user?.roles) return DEFAULT_PERMISSIONS
-    const perms = user.roles.flatMap(
-      (role) => ROLE_PERMISSIONS[role]?.permissions ?? [],
-    )
+    const perms = user.roles.flatMap((role) => ROLE_PERMISSIONS[role]?.permissions ?? [])
     // 去重
     return [...new Set(perms)]
   }, [user?.roles])
 
-  const can = useCallback(
-    (perm: string) => matchPermission(permissions, perm),
-    [permissions],
-  )
+  const can = useCallback((perm: string) => matchPermission(permissions, perm), [permissions])
 
-  const hasRole = useCallback(
-    (role: string) => user?.roles?.includes(role) ?? false,
-    [user?.roles],
-  )
+  const hasRole = useCallback((role: string) => user?.roles?.includes(role) ?? false, [user?.roles])
 
   const login = useCallback(async (token: string) => {
     localStorage.setItem('token', token)
@@ -146,7 +127,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
-
 
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext)

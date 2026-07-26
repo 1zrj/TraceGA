@@ -6,11 +6,11 @@ import { PromptService } from './prompt.service'
 import { parseAIJson, SSEMessage } from './ai.utils'
 
 export interface NlQueryJson {
-  startTime: string
-  endTime: string
-  eventTypes: string[]
-  limit: number
-  orderBy: 'asc' | 'desc'
+  startTime: string;
+  endTime: string;
+  eventTypes: string[];
+  limit: number;
+  orderBy: 'asc' | 'desc';
 }
 const ALLOWED_FIELDS = ['startTime', 'endTime', 'eventTypes', 'limit', 'orderBy']
 const ALLOWED_EVENT_TYPES = ['click', 'pageview', 'error', 'custom']
@@ -21,7 +21,7 @@ const ANSWER_MAX_TOKENS = 800
 
 @Injectable()
 export class NlQueryService {
-  private readonly logger = new Logger(NlQueryService.name)
+  private readonly logger = new Logger(NlQueryService.name);
 
   constructor(
     private readonly analysisService: AnalysisService,
@@ -105,7 +105,7 @@ export class NlQueryService {
   }
 
   private validateQueryJson(raw: Record<string, unknown>): NlQueryJson {
-    const cleaned: Record<string, unknown> = {}
+    const cleaned: Record<string, unknown> = {};
     for (const key of ALLOWED_FIELDS) {
       if (key in raw) cleaned[key] = raw[key]
     }
@@ -158,13 +158,13 @@ export class NlQueryService {
       const result = await this.glmClient.chat(systemPrompt, userPrompt, { temperature: 0.3, maxTokens: ANSWER_MAX_TOKENS })
       return result.content
     } catch (err) {
-      this.logger.error('NL 回答生成失败', err)
-      const count = Array.isArray(data) ? data.length : 0
-      return `AI 回答生成失败。查询到 ${count} 条数据，以下是原始结果：${JSON.stringify(data)}`
+      this.logger.error('NL 回答生成失败', err);
+      const count = Array.isArray(data) ? data.length : 0;
+      return `AI 回答生成失败。查询到 ${count} 条数据，以下是原始结果：${JSON.stringify(data)}`;
     }
   }
 
   private getTodayISO(): string {
-    return new Date().toISOString().slice(0, 10)
+    return new Date().toISOString().slice(0, 10);
   }
 }

@@ -4,11 +4,11 @@ import { GlmClientService } from './glm-client.service'
 import { PromptService } from './prompt.service'
 import { parseAIJson, withGlmFallback, SSEMessage } from './ai.utils'
 
-const MAX_TOKENS = 1024
+const MAX_TOKENS = 1024;
 
 @Injectable()
 export class RecommendService {
-  private readonly logger = new Logger(RecommendService.name)
+  private readonly logger = new Logger(RecommendService.name);
 
   constructor(
     private readonly glmClient: GlmClientService,

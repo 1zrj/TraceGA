@@ -12,23 +12,23 @@
  *   const result = await cb.call(() => fetch(...))
  */
 export class CircuitBreaker {
-  private failures = 0
-  private lastFailureTime = 0
-  private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED'
+  private failures = 0;
+  private lastFailureTime = 0;
+  private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
 
   /** 连续失败多少次后熔断 */
-  private readonly failureThreshold: number
+  private readonly failureThreshold: number;
 
   /** 熔断后等待多久进入半开 */
-  private readonly cooldownMs: number
+  private readonly cooldownMs: number;
 
   /** 熔断器名称（用于日志） */
-  private readonly name: string
+  private readonly name: string;
 
   constructor(name: string, options?: { failureThreshold?: number; cooldownMs?: number }) {
-    this.name = name
-    this.failureThreshold = options?.failureThreshold ?? 5
-    this.cooldownMs = options?.cooldownMs ?? 30_000
+    this.name = name;
+    this.failureThreshold = options?.failureThreshold ?? 5;
+    this.cooldownMs = options?.cooldownMs ?? 30_000;
   }
 
   /**
@@ -43,45 +43,45 @@ export class CircuitBreaker {
     if (this.state === 'OPEN') {
       // 冷却期已过 → 切换到半开，放一个探针请求
       if (Date.now() - this.lastFailureTime >= this.cooldownMs) {
-        this.state = 'HALF_OPEN'
+        this.state = 'HALF_OPEN';
       } else {
-        throw new CircuitBreakerOpenError(`${this.name} 熔断器已打开，请求被拒绝（冷却中，剩余 ${Math.ceil((this.cooldownMs - (Date.now() - this.lastFailureTime)) / 1000)} 秒）`)
+        throw new CircuitBreakerOpenError(`${this.name} 熔断器已打开，请求被拒绝（冷却中，剩余 ${Math.ceil((this.cooldownMs - (Date.now() - this.lastFailureTime)) / 1000)} 秒）`);
       }
     }
 
     try {
-      const result = await fn()
+      const result = await fn();
 
       // 成功 → 重置计数器
       if (this.state === 'HALF_OPEN') {
-        this.state = 'CLOSED'
-        this.failures = 0
+        this.state = 'CLOSED';
+        this.failures = 0;
       }
-      this.failures = 0
+      this.failures = 0;
 
-      return result
+      return result;
     } catch (err) {
-      this.failures++
-      this.lastFailureTime = Date.now()
+      this.failures++;
+      this.lastFailureTime = Date.now();
 
       if (this.state === 'HALF_OPEN' || this.failures >= this.failureThreshold) {
-        this.state = 'OPEN'
+        this.state = 'OPEN';
       }
 
-      throw err
+      throw err;
     }
   }
 
   /** 获取当前状态 */
   getState(): 'CLOSED' | 'OPEN' | 'HALF_OPEN' {
-    return this.state
+    return this.state;
   }
 
   /** 重置熔断器（手动恢复） */
   reset(): void {
-    this.state = 'CLOSED'
-    this.failures = 0
-    this.lastFailureTime = 0
+    this.state = 'CLOSED';
+    this.failures = 0;
+    this.lastFailureTime = 0;
   }
 }
 
@@ -90,7 +90,7 @@ export class CircuitBreaker {
  */
 export class CircuitBreakerOpenError extends Error {
   constructor(message: string) {
-    super(message)
-    this.name = 'CircuitBreakerOpenError'
+    super(message);
+    this.name = 'CircuitBreakerOpenError';
   }
 }

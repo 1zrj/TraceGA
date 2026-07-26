@@ -1,6 +1,5 @@
 // 权限点常量 + 角色-权限映射
 
-
 export const PERMISSIONS = {
   // 事件管理
   EVENTS_READ: 'events.read',
@@ -16,7 +15,6 @@ export const PERMISSIONS = {
   USERS_WRITE: 'users.write',
 } as const
 
-
 interface RoleConfig {
   name: string
   permissions: string[]
@@ -29,20 +27,12 @@ export const ROLE_PERMISSIONS: Record<string, RoleConfig> = {
   },
   editor: {
     name: '编辑者',
-    permissions: [
-      'events.*',
-      'dashboard.*',
-      'settings.read',
-    ],
+    permissions: ['events.*', 'dashboard.*', 'settings.read'],
   },
   analyst: {
     name: '分析员',
-    permissions: [
-      'events.read',
-      'dashboard.read',
-    ],
+    permissions: ['events.read', 'dashboard.read'],
   },
 } as const
-
 
 export const DEFAULT_PERMISSIONS: string[] = []

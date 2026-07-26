@@ -7,12 +7,10 @@ import { Spin } from 'antd'
 import { useAuth } from './AuthContext'
 import type { AppRouteObject } from '@/router/routes'
 
-
 interface RouteGuardProps {
   route: AppRouteObject
   children: React.ReactNode
 }
-
 
 export function RouteGuard({ route, children }: RouteGuardProps) {
   const { isAuthenticated, isLoading, hasRole, can } = useAuth()
@@ -38,9 +36,7 @@ export function RouteGuard({ route, children }: RouteGuardProps) {
   }
 
   if (!isAuthenticated) {
-    return (
-      <Navigate to="/login" state={{ from: location.pathname }} replace />
-    )
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
 
   if (route.roles && route.roles.length > 0) {

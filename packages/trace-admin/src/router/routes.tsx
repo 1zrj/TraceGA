@@ -12,7 +12,6 @@ import {
 } from '@ant-design/icons'
 import { PERMISSIONS } from '@/auth/permissions'
 
-
 export interface AppRouteObject extends Omit<RouteObject, 'children'> {
   roles?: string[]
   permissions?: string[]
@@ -22,7 +21,6 @@ export interface AppRouteObject extends Omit<RouteObject, 'children'> {
   icon?: React.ReactNode
   children?: AppRouteObject[]
 }
-
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function lazyPage(importer: () => Promise<any>, name: string) {
@@ -41,11 +39,7 @@ const EventListPage = lazyPage(
   () => import('@/features/event-management/pages/EventList'),
   'EventList',
 )
-const DashboardPage = lazyPage(
-  () => import('@/features/dashboard/pages/Dashboard'),
-  'Dashboard',
-)
-
+const DashboardPage = lazyPage(() => import('@/features/dashboard/pages/Dashboard'), 'Dashboard')
 
 export const appRoutes: AppRouteObject[] = [
   {
@@ -112,7 +106,6 @@ export const appRoutes: AppRouteObject[] = [
     component: HomePage,
   },
 ]
-
 
 export function toMenuItems(routes: AppRouteObject[]): MenuItem[] {
   return routes

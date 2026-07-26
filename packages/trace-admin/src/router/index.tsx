@@ -11,12 +11,9 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { appRoutes, toMenuItems } from './routes'
 import type { AppRouteObject } from './routes'
 
-
 function wrapRoutes(routes: AppRouteObject[]): AppRouteObject[] {
   return routes.map((route) => {
-    const children = route.children
-      ? wrapRoutes(route.children)
-      : undefined
+    const children = route.children ? wrapRoutes(route.children) : undefined
 
     const element = route.component ? (
       <RouteGuard route={route}>
@@ -47,19 +44,13 @@ function wrapRoutes(routes: AppRouteObject[]): AppRouteObject[] {
   })
 }
 
-
 const bRoutes = appRoutes.find((r) => r.path === '/')?.children ?? []
 const wrappedBRoutes = wrapRoutes(bRoutes)
-
 
 const standaloneRoutes = appRoutes.filter((r) => r.hideInMenu)
 const wrappedStandalone = wrapRoutes(standaloneRoutes)
 
-
-const menuItems = toMenuItems(
-  appRoutes.find((r) => r.path === '/')?.children ?? [],
-)
-
+const menuItems = toMenuItems(appRoutes.find((r) => r.path === '/')?.children ?? [])
 
 const router = createBrowserRouter([
   // 根路径重定向
