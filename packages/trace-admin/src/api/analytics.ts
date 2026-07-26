@@ -10,6 +10,7 @@ import type {
   EventTrend,
   TopEvent,
   EventTypeTrendItem,
+  ErrorEventItem,
 } from '@/types'
 
 /** 获取分析概览（首页 PV/UV/人均访问次数） */
@@ -50,4 +51,14 @@ export const getConversionRate = (params: { startTime?: string; endTime?: string
 /** 获取按事件类型分组的多日趋势数据 */
 export const getEventTypeTrend = (params: { startTime?: string; endTime?: string }) => {
   return request.get<EventTypeTrendItem[]>('/analytics/event-type-trend', { params })
+}
+
+/** 获取错误事件列表 */
+export const getErrorEvents = (params?: { startTime?: string; endTime?: string }) => {
+  return request.get<ErrorEventItem[]>('/analytics/error-events', { params })
+}
+
+/** 获取错误事件按日聚合趋势 */
+export const getErrorTrend = (params?: { startTime?: string; endTime?: string }) => {
+  return request.get<EventTrend[]>('/analytics/error-trend', { params })
 }

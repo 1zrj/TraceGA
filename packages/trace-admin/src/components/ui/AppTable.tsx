@@ -9,9 +9,7 @@ import { ReloadOutlined } from '@ant-design/icons'
 import { cn, cnVar } from '@/utils/cn'
 import type { Variant } from '@/tokens'
 
-// ═══════════════════════════════════════════════════════════════
 // 类型定义
-// ═══════════════════════════════════════════════════════════════
 
 export interface AppTableColumn<T> {
   title: string
@@ -39,15 +37,13 @@ export interface AppTableRequestResult<T> {
   total: number
 }
 
-export interface AppTableProps<T extends Record<string, unknown>> {
+export interface AppTableProps<T> {
   /** 模块变体 */
   variant?: Variant
   /** 列配置 */
   columns: AppTableColumn<T>[]
   /** 数据请求函数 */
-  request: (
-    params: AppTableRequestParams,
-  ) => Promise<AppTableRequestResult<T>>
+  request: (params: AppTableRequestParams) => Promise<AppTableRequestResult<T>>
   /** 行唯一键，默认 'id' */
   rowKey?: string | ((record: T) => string)
   /** 空状态引导文案 */
@@ -72,9 +68,7 @@ export interface AppTableProps<T extends Record<string, unknown>> {
   refreshKey?: number
 }
 
-// ═══════════════════════════════════════════════════════════════
 // 分页配置
-// ═══════════════════════════════════════════════════════════════
 
 const PAGINATION_CONFIG = {
   b: {
@@ -91,17 +85,9 @@ const PAGINATION_CONFIG = {
   },
 } as const
 
-// ═══════════════════════════════════════════════════════════════
 // 加载骨架屏
-// ═══════════════════════════════════════════════════════════════
 
-function SkeletonRows({
-  columnCount,
-  rowCount = 5,
-}: {
-  columnCount: number
-  rowCount?: number
-}) {
+function SkeletonRows({ columnCount, rowCount = 5 }: { columnCount: number; rowCount?: number }) {
   // 确定性宽度模式 — 避免 Math.random() 导致 re-render 不一致
   const widthPattern = ['85%', '70%', '90%', '60%', '75%']
   return (
@@ -117,9 +103,7 @@ function SkeletonRows({
   )
 }
 
-// ═══════════════════════════════════════════════════════════════
 // 空状态渲染
-// ═══════════════════════════════════════════════════════════════
 
 type EmptyType = 'empty' | 'search-empty' | 'error'
 
@@ -147,11 +131,7 @@ function renderEmptyState(
         subTitle="数据请求异常，请检查网络后重试"
         extra={
           options.onRetry && (
-            <Button
-              type="primary"
-              icon={<ReloadOutlined />}
-              onClick={options.onRetry}
-            >
+            <Button type="primary" icon={<ReloadOutlined />} onClick={options.onRetry}>
               重试
             </Button>
           )
@@ -179,9 +159,7 @@ function renderEmptyState(
   )
 }
 
-// ═══════════════════════════════════════════════════════════════
 // 列配置持久化（B 端 localStorage）
-// ═══════════════════════════════════════════════════════════════
 
 const STORAGE_KEY_PREFIX = 'tk-table-columns-'
 
@@ -197,20 +175,15 @@ function getStoredColumns(tableKey: string): string[] | null {
 
 function storeColumns(tableKey: string, visibleKeys: string[]) {
   try {
-    localStorage.setItem(
-      `${STORAGE_KEY_PREFIX}${tableKey}`,
-      JSON.stringify(visibleKeys),
-    )
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}${tableKey}`, JSON.stringify(visibleKeys))
   } catch {
     // localStorage 不可用时静默失败
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
 // AppTable 组件主体
-// ═══════════════════════════════════════════════════════════════
 
-export function AppTable<T extends Record<string, unknown>>({
+export function AppTable<T>({
   variant = 'b',
   columns,
   request: requestFn,
@@ -229,13 +202,13 @@ export function AppTable<T extends Record<string, unknown>>({
   const screens = Grid.useBreakpoint()
   const isMobile = variant === 'c' && !screens.md
 
-  // ── 数据状态 ──────────────────────────────────────────────
+  //  数据状态
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [total, setTotal] = useState(0)
 
-  // ── 分页状态 ──────────────────────────────────────────────
+  //  分页状态
   const paginationConfig = PAGINATION_CONFIG[variant]
   const [pagination, setPagination] = useState<{
     current: number
@@ -245,30 +218,26 @@ export function AppTable<T extends Record<string, unknown>>({
     pageSize: paginationConfig.defaultPageSize,
   })
 
-  // ── 排序状态 ──────────────────────────────────────────────
+  //  排序状态
   const [sort, setSort] = useState<{
     field?: string
     order?: 'ascend' | 'descend'
   }>(defaultSort ? { field: defaultSort.field, order: defaultSort.order } : {})
 
-  // ── 列可见性状态（B 端持久化） ─────────────────────────────
-  const tableKey = useRef(
-    `table-${Math.random().toString(36).slice(2, 8)}`,
-  ).current
+  // 列可见性状态（B 端持久化）
+  const tableKey = useRef(`table-${Math.random().toString(36).slice(2, 8)}`).current
   const [visibleKeys, setVisibleKeys] = useState<string[]>(() => {
     if (variant === 'b') {
       const stored = getStoredColumns(tableKey)
       if (stored) return stored
     }
-    return columns.map((c) => (c.key ?? (c.dataIndex as string) ?? ''))
+    return columns.map((c) => c.key ?? (c.dataIndex as string) ?? '')
   })
 
   const handleColumnToggle = useCallback(
     (key: string) => {
       setVisibleKeys((prev) => {
-        const next = prev.includes(key)
-          ? prev.filter((k) => k !== key)
-          : [...prev, key]
+        const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
         if (variant === 'b') {
           storeColumns(tableKey, next)
         }
@@ -278,7 +247,7 @@ export function AppTable<T extends Record<string, unknown>>({
     [variant, tableKey],
   )
 
-  // ── 请求数据 ──────────────────────────────────────────────
+  //  请求数据
   const fetchRef = useRef(0)
 
   const fetchData = useCallback(async () => {
@@ -307,8 +276,9 @@ export function AppTable<T extends Record<string, unknown>>({
       if (fetchId !== fetchRef.current) return
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
-      if (fetchId !== fetchRef.current) return
-      setLoading(false)
+      if (fetchId === fetchRef.current) {
+        setLoading(false)
+      }
     }
   }, [requestFn, pagination, sort])
 
@@ -317,7 +287,7 @@ export function AppTable<T extends Record<string, unknown>>({
     fetchData()
   }, [fetchData, refreshKey])
 
-  // ── 排序变化 ──────────────────────────────────────────────
+  // 排序变化
   const handleTableChange = useCallback(
     (
       _pag: unknown,
@@ -336,7 +306,7 @@ export function AppTable<T extends Record<string, unknown>>({
     [],
   )
 
-  // ── 分页变化 ──────────────────────────────────────────────
+  // 分页变化
   const handlePaginationChange = useCallback(
     (page: number, pageSize: number) => {
       setPagination({
@@ -347,7 +317,7 @@ export function AppTable<T extends Record<string, unknown>>({
     [pagination.pageSize],
   )
 
-  // ── 行点击 ────────────────────────────────────────────────
+  // 行点击
   const handleRow = useCallback(
     (record: T) => ({
       onClick: () => onRowClick?.(record),
@@ -356,7 +326,7 @@ export function AppTable<T extends Record<string, unknown>>({
     [onRowClick],
   )
 
-  // ── 可见列 ────────────────────────────────────────────────
+  //  可见列
   const displayColumns = useMemo(
     () =>
       columns
@@ -368,14 +338,13 @@ export function AppTable<T extends Record<string, unknown>>({
     [columns, visibleKeys],
   )
 
-  // ── 斑马纹（B 端开启） ─────────────────────────────────────
+  //  斑马纹（B 端开启）
   const rowClassName = useMemo(() => {
     if (variant !== 'b') return undefined
-    return (_record: T, index: number) =>
-      index % 2 === 1 ? 'tk-table-row-striped' : ''
+    return (_record: T, index: number) => (index % 2 === 1 ? 'tk-table-row-striped' : '')
   }, [variant])
 
-  // ── 确定当前空状态类型 ────────────────────────────────────
+  //  确定当前空状态类型
   const emptyType: EmptyType | null = error
     ? 'error'
     : loading
@@ -386,15 +355,13 @@ export function AppTable<T extends Record<string, unknown>>({
           : 'empty'
         : null
 
-  // ── 解析 rowKey ───────────────────────────────────────────
+  //  解析 rowKey
   const resolvedRowKey =
-    typeof rowKey === 'function'
-      ? (record: T) => rowKey(record)
-      : (rowKey as string)
+    typeof rowKey === 'function' ? (record: T) => rowKey(record) : (rowKey as string)
 
-  // ═══════════════════════════════════════════════════════════
+  //
   // 移动端卡片模式（C 端 < 768px）
-  // ═══════════════════════════════════════════════════════════
+  //
   if (isMobile) {
     return (
       <div className={cn('table-cards', cnVar(variant))}>
@@ -446,13 +413,11 @@ export function AppTable<T extends Record<string, unknown>>({
                           fontSize: 14,
                         }}
                       >
-                        <span style={{ color: 'var(--tk-color-text-tertiary)' }}>
-                          {col.title}
-                        </span>
+                        <span style={{ color: 'var(--tk-color-text-tertiary)' }}>{col.title}</span>
                         <span style={{ fontWeight: 500 }}>
                           {col.render
                             ? col.render(val, record, i)
-                            : (val as React.ReactNode) ?? '-'}
+                            : ((val as React.ReactNode) ?? '-')}
                         </span>
                       </div>
                     )
@@ -465,9 +430,8 @@ export function AppTable<T extends Record<string, unknown>>({
     )
   }
 
-  // ═══════════════════════════════════════════════════════════
   // 桌面端表格模式
-  // ═══════════════════════════════════════════════════════════
+
   return (
     <div className={cn('table-wrapper', cnVar(variant))}>
       {/* 工具栏 */}
