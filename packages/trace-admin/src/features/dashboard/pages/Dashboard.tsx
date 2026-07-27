@@ -127,7 +127,7 @@ export const Dashboard: React.FC = () => {
         const [overviewRes, trendRes, topRes, typeTrendRes] = await Promise.all([
           getOverview(params),
           getEventTrend({ interval: 'day', ...params }),
-          getTopEvents({ limit: 5, ...params }),
+          getTopEvents({ limit: 50, ...params }),
           getEventTypeTrend(params),
         ])
         setOverview(overviewRes)

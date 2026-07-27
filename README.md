@@ -60,6 +60,15 @@ pnpm lint:fix
 pnpm format
 ```
 
+### 初始化测试数据
+
+```bash
+node packages/trace-server/prisma/seed.js
+```
+
+> **注意**：该脚本每次运行会**追加 300 条模拟事件日志**（含 30 条错误事件），不会清空或覆盖已有数据。
+> 多次执行会持续增加数据量。如需重置，先手动 truncate `event_log` 表再执行。
+
 ### Workspace 包
 
 当前 workspace 包包括：

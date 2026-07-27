@@ -12,7 +12,6 @@ export const getEventById = (id: string) => {
 export const createEvent = (data: {
   eventName: string
   eventType: string
-  category: string
   description?: string
   propertySchema?: Record<string, unknown>
   appId: string
@@ -25,7 +24,6 @@ export const updateEvent = (
   data: {
     eventName?: string
     eventType?: string
-    category?: string
     description?: string
     propertySchema?: Record<string, unknown>
   },
