@@ -209,32 +209,23 @@ async function main() {
     }
     console.log('事件定义同步完成')
 
-    // ── 3. 插入模拟事件日志 ────────────────────────────────
-    const existingLogs = await conn.query('SELECT COUNT(*) as cnt FROM event_log')
-    if (existingLogs[0].cnt > 99999) {
-      console.log(`已存在 ${existingLogs[0].cnt} 条事件日志，跳过模拟数据插入`)
-    } else {
-      // 如果已有但不足 50 条，先清空再重新插入
-      if (existingLogs[0].cnt > 0) {
-        await conn.query('DELETE FROM event_log')
-        console.log('已清空旧事件日志')
-      }
+    // ── 3. 插入模拟事件日志（每次追加 300 条） ──────────────
+    const beforeCount = await conn.query('SELECT COUNT(*) as cnt FROM event_log')
+    const events = generateEvents(300, 30)
+    const batchSize = 20
 
-      const events = generateEvents(300, 30)
-      const batchSize = 20
+    for (let i = 0; i < events.length; i += batchSize) {
+      const batch = events.slice(i, i + batchSize)
+      const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')
+      const values = batch.flat()
 
-      for (let i = 0; i < events.length; i += batchSize) {
-        const batch = events.slice(i, i + batchSize)
-        const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')
-        const values = batch.flat()
-
-        await conn.query(
-          `INSERT INTO event_log (project_id, event_name, event_type, occurred_at, uid, session_id, page_url, event_params, user_agent, ip) VALUES ${placeholders}`,
-          values,
-        )
-      }
-      console.log(`插入 ${events.length} 条模拟事件日志成功`)
+      await conn.query(
+        `INSERT INTO event_log (project_id, event_name, event_type, occurred_at, uid, session_id, page_url, event_params, user_agent, ip) VALUES ${placeholders}`,
+        values,
+      )
     }
+    const cnt = Number(beforeCount[0].cnt)
+    console.log(`追加 ${events.length} 条模拟事件日志成功（当前总量：${cnt} → ${cnt + events.length}）`)
 
     // ── 4. 创建默认 admin 用户 ──────────────────────────────
     const existingUser = await conn.query('SELECT id FROM user WHERE username = ?', ['admin'])
@@ -247,6 +238,21 @@ async function main() {
       console.log('默认 admin 用户创建成功（密码: admin123）')
     } else {
       console.log('admin 用户已存在，跳过创建')
+    }
+
+    // ── 4. 告警规则 ────────────────────────────────────
+    const existingAlarms = await conn.query('SELECT COUNT(*) AS cnt FROM alarm')
+    if (Number(existingAlarms[0].cnt) > 0) {
+      console.log('告警规则已存在，跳过创建')
+    } else {
+      await conn.query(`INSERT INTO alarm (project_id, event_name, threshold, operator, notify_type, status) VALUES
+        ('app001', 'page_view', 10000, 'gt', 'webhook', 1),
+        ('app001', 'click', 5000, 'gt', 'email', 1),
+        ('app001', 'error', 100, 'gt', 'webhook', 1),
+        ('app001', 'api_call', 2000, 'gt', 'email', 1),
+        ('app001', '订单完成', 500, 'lt', 'webhook', 1)
+      `)
+      console.log('插入 5 条告警规则成功')
     }
 
     console.log('\n✓ 种子数据初始化完成！')

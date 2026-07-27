@@ -91,7 +91,6 @@ export class EventRepository {
       id: event.id.toString(),
       eventName: event.event_name,
       eventType: event.event_type ?? '',
-      category: event.event_type ?? '',
       description: event.event_desc,
       propertySchema: event.param_schema as Record<string, any>,
       appId: event.project_id,

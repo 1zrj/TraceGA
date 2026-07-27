@@ -13,7 +13,6 @@ export interface Event {
   id: string
   eventName: string
   eventType: string
-  category: string
   appId: string
   description?: string
   propertySchema?: Record<string, unknown>

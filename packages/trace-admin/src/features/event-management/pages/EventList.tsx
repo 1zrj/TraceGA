@@ -53,7 +53,6 @@ export const EventList: React.FC = () => {
       form.setFieldsValue({
         eventName: record.eventName,
         eventType: record.eventType,
-        category: record.category,
         description: record.description,
       })
       setModalOpen(true)
@@ -88,7 +87,6 @@ export const EventList: React.FC = () => {
         await updateEvent(editingEvent.id, {
           eventName: values.eventName,
           eventType: values.eventType,
-          category: values.category,
           description: values.description,
         })
         message.success('更新成功')
@@ -96,7 +94,6 @@ export const EventList: React.FC = () => {
         await createEvent({
           eventName: values.eventName,
           eventType: values.eventType,
-          category: values.category,
           description: values.description,
           appId: 'app001',
         })
@@ -123,7 +120,6 @@ export const EventList: React.FC = () => {
     () => [
       { title: '事件名称', dataIndex: 'eventName', key: 'eventName' },
       { title: '事件类型', dataIndex: 'eventType', key: 'eventType' },
-      { title: '分类', dataIndex: 'category', key: 'category' },
       { title: '应用ID', dataIndex: 'appId', key: 'appId' },
       { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt' },
       {
@@ -228,17 +224,7 @@ export const EventList: React.FC = () => {
               <Select.Option value="custom">自定义</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item
-            name="category"
-            label="分类"
-            rules={[{ required: true, message: '请选择分类' }]}
-          >
-            <Select>
-              <Select.Option value="user_behavior">用户行为</Select.Option>
-              <Select.Option value="business">业务</Select.Option>
-              <Select.Option value="system">系统</Select.Option>
-            </Select>
-          </Form.Item>
+
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={3} />
           </Form.Item>
