@@ -2,11 +2,14 @@
  * 基于数组实现的泛型 FIFO 循环缓冲区，用于暂存待上报的埋点事件。
  * 当缓冲区满时，最早入队的事件会被自动移除。
  *
+ * 使用 head 索引实现 O(1) 溢出移除，避免 shift() 的 O(n) 开销。
+ *
  * @template T - 缓冲区存储的元素类型
  */
 export class EventBuffer<T> {
   private items: T[];
   private maxSize: number;
+  private head = 0;
 
   /**
    * 创建一个指定最大容量的缓冲区。
@@ -23,24 +26,25 @@ export class EventBuffer<T> {
 
   /**
    * 向缓冲区添加一条数据。
-   * 若当前数量已达到最大容量，会先移除最旧的一条数据，再添加新数据。
+   * 若当前数量已达到最大容量，会先移除最旧的一条数据（O(1)），再添加新数据。
    *
    * @param item - 待添加的数据
    */
   push(item: T): void {
-    if (this.items.length >= this.maxSize) {
-      this.pop();
+    if (this.size() >= this.maxSize) {
+      this.head++;
     }
     this.items.push(item);
   }
 
   /**
-   * 移除并返回缓冲区中最旧的一条数据。
+   * 移除并返回缓冲区中最旧的一条数据（O(1)）。
    *
    * @returns 最旧的数据，若缓冲区为空则返回 `undefined`
    */
   pop(): T | undefined {
-    return this.items.shift();
+    if (this.head >= this.items.length) return undefined;
+    return this.items[this.head++];
   }
 
   /**
@@ -49,7 +53,7 @@ export class EventBuffer<T> {
    * @returns 缓冲区中元素的数量
    */
   size(): number {
-    return this.items.length;
+    return this.items.length - this.head;
   }
 
   /**
@@ -57,6 +61,7 @@ export class EventBuffer<T> {
    */
   clear(): void {
     this.items = [];
+    this.head = 0;
   }
 
   /**
@@ -66,8 +71,9 @@ export class EventBuffer<T> {
    * @returns 包含缓冲区中所有数据的数组（按入队顺序排列）
    */
   takeAll(): T[] {
-    const all = this.items;
+    const all = this.items.slice(this.head);
     this.items = [];
+    this.head = 0;
     return all;
   }
 }
