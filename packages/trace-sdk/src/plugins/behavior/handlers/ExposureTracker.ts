@@ -129,7 +129,7 @@ export class ExposureTracker {
           return;
         }
 
-        const metadata = getElementMetadata(element);
+        const metadata = getElementMetadata(element, { collectElementId: false });
 
         const payload: ExposureBehaviorPayload = {
           type: 'exposure',

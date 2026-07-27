@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Reporter } from '../src/reporter/index';
+import { TraceCore } from '../src/core/TraceCore';
+import { ErrorPlugin } from '../src/plugins/error/ErrorPlugin';
 
 describe('Reporter exports', () => {
   let reporter: Reporter;

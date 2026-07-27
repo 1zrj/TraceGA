@@ -21,7 +21,6 @@ import {
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet, Link } from 'react-router-dom'
 import { useAppStore } from '@/store/useAppStore'
-import { AiAssistantPanel } from '@/features/dashboard/components/AiAssistantPanel'
 import { cn, cnVar } from '@/utils/cn'
 import type { Variant } from '@/tokens'
 
@@ -440,7 +439,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           )}
         </Layout>
       </Layout>
-      <AiAssistantPanel />
     </div>
   )
 }
