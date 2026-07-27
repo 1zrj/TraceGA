@@ -1,125 +1,153 @@
-import { IsOptional, IsString, IsArray } from 'class-validator'
+import { IsOptional, IsString, IsArray } from 'class-validator';
 
 export class AnalysisSummaryDto {
   @IsOptional()
   @IsString()
-  appId?: string
+  appId?: string;
 
   @IsOptional()
   @IsString()
-  startTime?: string
+  startTime?: string;
 
   @IsOptional()
   @IsString()
-  endTime?: string
+  endTime?: string;
 }
 
 export class AnalysisTrendDto {
   @IsOptional()
   @IsString()
-  appId?: string
+  appId?: string;
 
   @IsOptional()
   @IsString()
-  eventType?: string
+  eventType?: string;
 
   @IsOptional()
   @IsString()
-  startTime?: string
+  startTime?: string;
 
   @IsOptional()
   @IsString()
-  endTime?: string
+  endTime?: string;
 
   @IsOptional()
   @IsString()
-  interval?: string
+  interval?: string;
 }
 
 export class AnalysisFilterDto {
   @IsOptional()
   @IsString()
-  appId?: string
+  appId?: string;
 
   @IsOptional()
   @IsArray()
-  eventTypes?: string[]
+  eventTypes?: string[];
 
   @IsOptional()
   @IsString()
-  startTime?: string
+  startTime?: string;
 
   @IsOptional()
   @IsString()
-  endTime?: string
+  endTime?: string;
 
   @IsOptional()
-  filters?: Record<string, any>[]
+  filters?: Record<string, any>[];
 }
 
 export class AnalyticsOverviewDto {
   @IsOptional()
   @IsString()
-  appId?: string
+  appId?: string;
 
   @IsOptional()
   @IsString()
-  startTime?: string
+  startTime?: string;
 
   @IsOptional()
   @IsString()
-  endTime?: string
+  endTime?: string;
 }
 
 export class AnalyticsTrendDto {
   @IsOptional()
   @IsString()
-  appId?: string
+  appId?: string;
 
   @IsOptional()
   @IsString()
-  startTime?: string
+  startTime?: string;
 
   @IsOptional()
   @IsString()
-  endTime?: string
+  endTime?: string;
 
   @IsOptional()
   @IsString()
-  interval?: 'hour' | 'day' | 'week'
+  interval?: 'hour' | 'day' | 'week';
 }
 
 export class AnalyticsEventTypeTrendDto {
   @IsOptional()
   @IsString()
-  appId?: string
+  appId?: string;
 
   @IsOptional()
   @IsString()
-  startTime?: string
+  startTime?: string;
 
   @IsOptional()
   @IsString()
-  endTime?: string
+  endTime?: string;
 
   @IsOptional()
   @IsString()
-  interval?: 'hour' | 'day' | 'week'
+  interval?: 'hour' | 'day' | 'week';
 }
 
 export class AnalyticsTopEventsDto {
   @IsOptional()
   @IsString()
-  appId?: string
+  appId?: string;
 
   @IsOptional()
   @IsString()
-  startTime?: string
+  startTime?: string;
 
   @IsOptional()
   @IsString()
-  endTime?: string
+  endTime?: string;
 
   @IsOptional()
-  limit?: number
+  limit?: number;
+}
+
+export class AnalyticsErrorEventsDto {
+  @IsOptional()
+  @IsString()
+  appId?: string;
+
+  @IsOptional()
+  @IsString()
+  startTime?: string;
+
+  @IsOptional()
+  @IsString()
+  endTime?: string;
+}
+
+export class AnalyticsErrorTrendDto {
+  @IsOptional()
+  @IsString()
+  appId?: string;
+
+  @IsOptional()
+  @IsString()
+  startTime?: string;
+
+  @IsOptional()
+  @IsString()
+  endTime?: string;
 }

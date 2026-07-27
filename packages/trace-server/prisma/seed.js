@@ -11,7 +11,7 @@
 require('dotenv/config')
 
 const mariadb = require('mariadb')
-const bcrypt = require('bcrypt')
+const bcrypt = require('bcryptjs')
 
 // ── 数据库连接 ──────────────────────────────────────────────
 
@@ -37,6 +37,23 @@ const EVENT_DEFINITIONS = [
   { event_name: 'form_submit', event_type: 'form_submit', event_desc: '表单提交' },
   { event_name: 'api_call', event_type: 'custom', event_desc: 'API 调用' },
   { event_name: 'scroll_depth', event_type: 'scroll', event_desc: '页面滚动深度' },
+  // 漏斗图相关事件：事件名称与前端漏斗五步映射
+  { event_name: '用户注册', event_type: 'custom', event_desc: '用户注册' },
+  { event_name: '用户登录', event_type: 'custom', event_desc: '用户登录' },
+  { event_name: '商品浏览', event_type: 'page_view', event_desc: '商品浏览' },
+  { event_name: '添加购物车', event_type: 'click', event_desc: '添加购物车' },
+  { event_name: '订单完成', event_type: 'form_submit', event_desc: '订单完成' },
+]
+
+const ERROR_TYPES = ['js-error', 'promise-error', 'resource-error', 'http-error']
+const ERROR_MESSAGES = [
+  'Uncaught TypeError: Cannot read properties of undefined',
+  'Unhandled Promise Rejection: Network request failed',
+  'Failed to load resource: /static/js/chunk-3a2b.js',
+  'HTTP 500 Internal Server Error at /api/analytics/event-trend',
+  'ReferenceError: $ is not defined',
+  'SyntaxError: Unexpected token < in JSON at position 0',
+  'RangeError: Maximum call stack size exceeded',
 ]
 
 const PAGE_URLS = ['/', '/dashboard', '/event-management', '/profile', '/login']
@@ -52,13 +69,26 @@ const IPS = ['192.168.1.100', '10.0.0.50', '172.16.0.10', '203.0.113.42']
 
 /**
  * 生成分布于过去 N 天内的模拟事件日志
+ * @param {number} normalCount 普通事件数量
+ * @param {number} errorCount  错误事件数量
  */
-function generateEvents(count) {
+/**
+ * 在一天内的事件密度分布：上午较少、下午高峰、晚上中等
+ */
+function getTimeDistribution() {
+  const r = Math.random()
+  if (r < 0.15) return 7 + Math.random() * 2          // 07:00-09:00 上午少
+  if (r < 0.35) return 9 + Math.random() * 3           // 09:00-12:00 上午中
+  if (r < 0.70) return 14 + Math.random() * 4          // 14:00-18:00 下午高峰
+  return 19 + Math.random() * 4                         // 19:00-23:00 晚上中
+}
+
+function generateEvents(normalCount, errorCount) {
   const now = Date.now()
   const DAY_MS = 86400000
   const events = []
 
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < normalCount; i++) {
     const def = EVENT_DEFINITIONS[Math.floor(Math.random() * EVENT_DEFINITIONS.length)]
     const uid = UIDS[Math.floor(Math.random() * UIDS.length)]
     const sessionId = SESSION_IDS[Math.floor(Math.random() * SESSION_IDS.length)]
@@ -66,9 +96,9 @@ function generateEvents(count) {
     const userAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]
     const ip = IPS[Math.floor(Math.random() * IPS.length)]
 
-    // 随机偏移：过去 30 天内
+    // 随机偏移：过去 30 天内，按时间段密度分布
     const daysAgo = Math.floor(Math.random() * 30)
-    const hoursOffset = Math.floor(Math.random() * 24)
+    const hoursOffset = getTimeDistribution()
     const minutesOffset = Math.floor(Math.random() * 60)
     const occurredAt = new Date(now - daysAgo * DAY_MS - hoursOffset * 3600000 - minutesOffset * 60000)
       .toISOString()
@@ -91,6 +121,48 @@ function generateEvents(count) {
       PROJECT_ID,
       def.event_name,
       def.event_type,
+      occurredAt,
+      uid,
+      sessionId,
+      pageUrl,
+      eventParams,
+      userAgent,
+      ip,
+    ])
+  }
+
+  // 生成错误事件
+  for (let i = 0; i < errorCount; i++) {
+    const uid = UIDS[Math.floor(Math.random() * UIDS.length)]
+    const sessionId = SESSION_IDS[Math.floor(Math.random() * SESSION_IDS.length)]
+    const pageUrl = PAGE_URLS[Math.floor(Math.random() * PAGE_URLS.length)]
+    const userAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]
+    const ip = IPS[Math.floor(Math.random() * IPS.length)]
+
+    const daysAgo = Math.floor(Math.random() * 30)
+    const hoursOffset = getTimeDistribution()
+    const minutesOffset = Math.floor(Math.random() * 60)
+    const occurredAt = new Date(now - daysAgo * DAY_MS - hoursOffset * 3600000 - minutesOffset * 60000)
+      .toISOString()
+      .slice(0, 19)
+      .replace('T', ' ')
+
+    const errorType = ERROR_TYPES[Math.floor(Math.random() * ERROR_TYPES.length)]
+    const message = ERROR_MESSAGES[Math.floor(Math.random() * ERROR_MESSAGES.length)]
+    const errorName = message.split(':')[0]
+    const duration = Math.floor(Math.random() * 5000) + 200
+
+    const eventParams = JSON.stringify({
+      type: errorType,
+      message,
+      errorName,
+      duration,
+    })
+
+    events.push([
+      PROJECT_ID,
+      `error_${errorType}`,
+      'error',
       occurredAt,
       uid,
       sessionId,
@@ -139,7 +211,7 @@ async function main() {
 
     // ── 3. 插入模拟事件日志 ────────────────────────────────
     const existingLogs = await conn.query('SELECT COUNT(*) as cnt FROM event_log')
-    if (existingLogs[0].cnt > 50) {
+    if (existingLogs[0].cnt > 99999) {
       console.log(`已存在 ${existingLogs[0].cnt} 条事件日志，跳过模拟数据插入`)
     } else {
       // 如果已有但不足 50 条，先清空再重新插入
@@ -148,7 +220,7 @@ async function main() {
         console.log('已清空旧事件日志')
       }
 
-      const events = generateEvents(80)
+      const events = generateEvents(300, 30)
       const batchSize = 20
 
       for (let i = 0; i < events.length; i += batchSize) {
