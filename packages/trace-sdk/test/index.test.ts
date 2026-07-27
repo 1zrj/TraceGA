@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Reporter } from '../src/reporter/index';
+import { TraceCore } from '../src/core/TraceCore';
+import { ErrorPlugin } from '../src/plugins/error/ErrorPlugin';
 
 describe('Reporter exports', () => {
   let reporter: Reporter;
@@ -9,9 +11,7 @@ describe('Reporter exports', () => {
       userAgent: 'Mozilla/5.0',
       sendBeacon: vi.fn().mockReturnValue(true),
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 })
-    ));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 })));
     reporter = new Reporter();
   });
 

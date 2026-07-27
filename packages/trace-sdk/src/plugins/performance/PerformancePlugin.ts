@@ -27,6 +27,10 @@ export class PerformancePlugin implements TracePlugin {
     this.core = core;
     this.installed = true;
 
+    if (this.config.resource) {
+      console.warn('[TraceGA] PerformancePlugin: resource tracking is not yet implemented. The `resource` config option has no effect.');
+    }
+
     if (!this.config.webVitals) {
       return;
     }
