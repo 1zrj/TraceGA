@@ -225,20 +225,11 @@
           <div class="form-row">
             <div class="form-group">
               <label>刷新间隔 (ms)</label>
-              <select id="flushInterval">
-                <option value="1000">1000</option>
-                <option value="3000" selected>3000</option>
-                <option value="5000">5000</option>
-                <option value="10000">10000</option>
-              </select>
+              <input type="number" id="flushInterval" value="3000" min="100" step="100" style="width:100%;box-sizing:border-box;padding:8px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:14px;">
             </div>
             <div class="form-group">
               <label>最大并发</label>
-              <select id="maxConcurrentRequests">
-                <option value="1">1</option>
-                <option value="3" selected>3</option>
-                <option value="5">5</option>
-              </select>
+              <input type="number" id="maxConcurrentRequests" value="3" min="1" max="20" style="width:100%;box-sizing:border-box;padding:8px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:14px;">
             </div>
           </div>
           <div class="btn-row">
