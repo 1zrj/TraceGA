@@ -1,14 +1,8 @@
 packages:
-  - 'packages/trace-sdk'
-  - 'packages/trace-server'
-  - 'packages/trace-admin'
+  - "packages/trace-sdk"
+  - "packages/trace-server"
+  - "packages/trace-admin"
 allowBuilds:
   '@nestjs/core': true
-  '@nestjs/cli': true
-  '@prisma/engines': true
-  esbuild: true
+  esbuild: false
   msw: true
-  prisma: true
-  sqlite3: false
-  bcrypt: true
-shamefullyHoist: true

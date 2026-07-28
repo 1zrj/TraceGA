@@ -1,7 +1,0 @@
-用户问题：{{question}}
-
-查询参数：
-{{queryJson}}
-
-查询结果：
-{{dataJson}}

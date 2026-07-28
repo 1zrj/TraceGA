@@ -1,36 +1,33 @@
 import request from '@/utils/request'
-import type { Event, PagedResponse, EventQueryDto } from '@/types'
+import type { Event } from '@/types'
 
-export const getEvents = (params: EventQueryDto) => {
-  return request.get<PagedResponse<Event>>('/events', { params })
+interface GetEventsResponse {
+  list: Event[]
+  total: number
+}
+
+export const getEvents = (params: {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  startTime?: string
+  endTime?: string
+}) => {
+  return request.get<{ data: GetEventsResponse }>('/api/events', { params })
 }
 
 export const getEventById = (id: string) => {
-  return request.get<Event>(`/events/${id}`)
+  return request.get<{ data: Event }>(`/api/events/${id}`)
 }
 
-export const createEvent = (data: {
-  eventName: string
-  eventType: string
-  description?: string
-  propertySchema?: Record<string, unknown>
-  appId: string
-}) => {
-  return request.post<{ id: string; createdAt: string }>('/events', data)
+export const createEvent = (data: Record<string, unknown>) => {
+  return request.post<{ data: Event }>('/api/events', data)
 }
 
-export const updateEvent = (
-  id: string,
-  data: {
-    eventName?: string
-    eventType?: string
-    description?: string
-    propertySchema?: Record<string, unknown>
-  },
-) => {
-  return request.put<{ id: string; updatedAt: string }>(`/events/${id}`, data)
+export const updateEvent = (id: string, data: Record<string, unknown>) => {
+  return request.put<{ data: Event }>(`/api/events/${id}`, data)
 }
 
 export const deleteEvent = (id: string) => {
-  return request.delete<null>(`/events/${id}`)
+  return request.delete<{ data: void }>(`/api/events/${id}`)
 }

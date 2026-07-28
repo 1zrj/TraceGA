@@ -1,101 +1,49 @@
 import { Injectable } from '@nestjs/common'
-import { Prisma } from '@generated/prisma'
-import { PrismaService } from '@/database/prisma.service'
-import { TrackEvent, TrackEventDefinition } from '../entities/track.entity'
+import { ClickHouseService } from '@/database/clickhouse.service'
+import { TrackEvent, TrackEventEntity } from '../entities/track.entity'
+import { generateId } from '@/common/utils'
 
 @Injectable()
 export class TrackRepository {
-  constructor(private readonly prisma: PrismaService) {}
-
-  async findExistingProjects(appIds: string[]): Promise<Set<string>> {
-    if (appIds.length === 0) {
-      return new Set()
-    }
-
-    const projects = await this.prisma.project.findMany({
-      where: { project_id: { in: [...new Set(appIds)] } },
-      select: { project_id: true },
-    })
-    return new Set(projects.map(project => project.project_id))
-  }
-
-  async findActiveEventDefinitions(appIds: string[], eventNames: string[]): Promise<TrackEventDefinition[]> {
-    if (appIds.length === 0 || eventNames.length === 0) {
-      return []
-    }
-
-    const definitions = await this.prisma.event_definition.findMany({
-      where: {
-        project_id: { in: [...new Set(appIds)] },
-        event_name: { in: [...new Set(eventNames)] },
-        status: 1,
-      },
-      select: {
-        project_id: true,
-        event_name: true,
-        event_type: true,
-        param_schema: true,
-      },
-    })
-
-    return definitions.map(definition => ({
-      appId: definition.project_id,
-      eventName: definition.event_name,
-      eventType: definition.event_type ?? '',
-      propertySchema: definition.param_schema as Record<string, any> | null,
-    }))
-  }
+  constructor(private readonly clickHouseService: ClickHouseService) {}
 
   async insertEvent(event: TrackEvent, ip: string, userAgent: string): Promise<void> {
-    await this.prisma.event_log.create({
-      data: this.toEventLogCreateInput(event, ip, userAgent),
-    })
+    const entity: TrackEventEntity = {
+      event_id: event.eventId || generateId('evt'),
+      event_type: event.eventType,
+      event_name: event.eventName,
+      app_id: event.appId,
+      user_id: event.userId || '',
+      session_id: event.sessionId || '',
+      properties: JSON.stringify(event.properties || {}),
+      timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
+      url: event.url || '',
+      referrer: event.referrer || '',
+      user_agent: userAgent,
+      ip,
+      created_at: new Date(),
+    }
+
+    await this.clickHouseService.insert('events', [entity])
   }
 
   async insertBatch(events: TrackEvent[], ip: string, userAgent: string): Promise<void> {
-    if (events.length === 0) {
-      return
-    }
-
-    await this.prisma.event_log.createMany({
-      data: events.map(event => this.toEventLogCreateManyInput(event, ip, userAgent)),
-    })
-  }
-
-  private toEventLogCreateInput(event: TrackEvent, ip: string, userAgent: string): Prisma.event_logCreateInput {
-    return this.buildEventLogData(event, ip, userAgent)
-  }
-
-  private toEventLogCreateManyInput(event: TrackEvent, ip: string, userAgent: string): Prisma.event_logCreateManyInput {
-    return this.buildEventLogData(event, ip, userAgent)
-  }
-
-  private buildEventLogData(event: TrackEvent, ip: string, userAgent: string) {
-    return {
-      project_id: event.appId,
-      event_name: event.eventName,
+    const entities: TrackEventEntity[] = events.map((event) => ({
+      event_id: event.eventId || generateId('evt'),
       event_type: event.eventType,
-      occurred_at: this.toOccurredAt(event.timestamp),
-      uid: event.userId || null,
-      session_id: event.sessionId || null,
-      page_url: event.url || null,
-      event_params: event.properties ?? Prisma.JsonNull,
-      common_params: this.buildCommonParams(event),
-      user_agent: userAgent || event.userAgent || null,
-      ip: ip || null,
-    }
-  }
+      event_name: event.eventName,
+      app_id: event.appId,
+      user_id: event.userId || '',
+      session_id: event.sessionId || '',
+      properties: JSON.stringify(event.properties || {}),
+      timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
+      url: event.url || '',
+      referrer: event.referrer || '',
+      user_agent: userAgent,
+      ip,
+      created_at: new Date(),
+    }))
 
-  private toOccurredAt(timestamp?: number): Date {
-    return timestamp !== undefined ? new Date(timestamp) : new Date()
-  }
-
-  private buildCommonParams(event: TrackEvent): Prisma.InputJsonValue | typeof Prisma.JsonNull {
-    const commonParams = {
-      ...(event.commonParams ?? {}),
-      ...(event.anonymousId && { anonymousId: event.anonymousId }),
-      ...(event.referrer && { referrer: event.referrer }),
-    }
-    return Object.keys(commonParams).length > 0 ? commonParams : Prisma.JsonNull
+    await this.clickHouseService.insert('events', entities)
   }
 }
