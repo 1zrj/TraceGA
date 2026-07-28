@@ -106,4 +106,55 @@ describe('ConcurrencyLimiter', () => {
       expect(results).toContain('end-C');
     });
   });
+
+  describe('destroy', () => {
+    it('should reject all queued acquire promises', async () => {
+      const limiter = new ConcurrencyLimiter(1);
+
+      await limiter.acquire();
+
+      const p1 = limiter.acquire();
+      const p2 = limiter.acquire();
+      const p3 = limiter.acquire();
+
+      expect(limiter.getWaitingCount()).toBe(3);
+
+      limiter.destroy();
+
+      await expect(p1).rejects.toThrow('ConcurrencyLimiter destroyed');
+      await expect(p2).rejects.toThrow('ConcurrencyLimiter destroyed');
+      await expect(p3).rejects.toThrow('ConcurrencyLimiter destroyed');
+    });
+
+    it('should reset active count after destroy', async () => {
+      const limiter = new ConcurrencyLimiter(2);
+
+      await limiter.acquire();
+      await limiter.acquire();
+      expect(limiter.getActiveCount()).toBe(2);
+
+      limiter.destroy();
+      expect(limiter.getActiveCount()).toBe(0);
+    });
+
+    it('should allow new acquire after destroy', async () => {
+      const limiter = new ConcurrencyLimiter(1);
+
+      // 先占满槽位
+      await limiter.acquire();
+      expect(limiter.getActiveCount()).toBe(1);
+
+      // 这个 acquire 会排队等待
+      const p = limiter.acquire();
+      expect(limiter.getWaitingCount()).toBe(1);
+
+      limiter.destroy();
+
+      await expect(p).rejects.toThrow('ConcurrencyLimiter destroyed');
+
+      // 销毁后可以重新 acquire
+      await limiter.acquire();
+      expect(limiter.getActiveCount()).toBe(1);
+    });
+  });
 });

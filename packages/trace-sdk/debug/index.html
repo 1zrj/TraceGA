@@ -636,22 +636,33 @@
       const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
       if (url.includes('/api/track')) {
         addLog('NET', 'Fetch → ' + url, 'network');
+
+        // 从请求 body 中解析事件数量，用于准确更新 pending 计数
+        let eventCount = 1;
+        try {
+          const body = args[1]?.body;
+          if (typeof body === 'string') {
+            const parsed = JSON.parse(body);
+            eventCount = parsed?.events?.length || 1;
+          }
+        } catch { /* 解析失败使用默认值 */ }
+
         return origFetch.apply(this, args).then(res => {
           if (res.ok) {
-            stats.success++;
-            stats.pending = Math.max(0, stats.pending - 1);
+            stats.success += eventCount;
+            stats.pending = Math.max(0, stats.pending - eventCount);
             updateStats();
-            addLog('NET', '响应成功: ' + res.status, 'success');
+            addLog('NET', '响应成功: ' + res.status + ' (' + eventCount + ' 事件)', 'success');
           } else {
-            stats.failed++;
-            stats.pending = Math.max(0, stats.pending - 1);
+            stats.failed += eventCount;
+            stats.pending = Math.max(0, stats.pending - eventCount);
             updateStats();
             addLog('NET', '响应失败: ' + res.status + ' ' + res.statusText, 'error');
           }
           return res;
         }).catch(err => {
-          stats.failed++;
-          stats.pending = Math.max(0, stats.pending - 1);
+          stats.failed += eventCount;
+          stats.pending = Math.max(0, stats.pending - eventCount);
           updateStats();
           addLog('NET', '网络错误: ' + err.message, 'error');
           throw err;

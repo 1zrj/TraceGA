@@ -3,6 +3,17 @@ import type { TrackEventData } from '../types';
 /** sendBeacon 单次 payload 上限（字节），超过则分片 */
 const MAX_BEACON_PAYLOAD = 60 * 1024; // 60KB
 
+function getBatchUrl(reportUrl: string): string {
+  const baseUrl = typeof window !== 'undefined' && window.location?.href ? window.location.href : 'http://tracega.local/';
+  const parsedUrl = new URL(reportUrl, baseUrl);
+
+  if (!parsedUrl.pathname.endsWith('/batch')) {
+    parsedUrl.pathname = `${parsedUrl.pathname.replace(/\/$/, '')}/batch`;
+  }
+  parsedUrl.hash = '';
+  return parsedUrl.href;
+}
+
 export interface LifecycleManagerConfig {
   /** 上报地址 */
   reportUrl: string;
@@ -25,6 +36,7 @@ export interface LifecycleManagerConfig {
  */
 export class LifecycleManager {
   private reportUrl: string;
+  private batchUrl: string;
   private getRemainingEvents: () => TrackEventData[];
   private pauseScheduler: () => void;
   private destroyScheduler: () => void;
@@ -34,6 +46,7 @@ export class LifecycleManager {
 
   constructor(config: LifecycleManagerConfig) {
     this.reportUrl = config.reportUrl;
+    this.batchUrl = getBatchUrl(config.reportUrl);
     this.getRemainingEvents = config.getRemainingEvents;
     this.pauseScheduler = config.pauseScheduler;
     this.destroyScheduler = config.destroyScheduler;
@@ -84,13 +97,14 @@ export class LifecycleManager {
   private sendWithBeacon(events: TrackEventData[]): void {
     const isBeaconAvailable = typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function';
 
-    const json = JSON.stringify(events);
+    const payload = { events };
+    const json = JSON.stringify(payload);
     const blob = new Blob([json], { type: 'application/json' });
 
     // 单次 payload 不超过 60KB，直接发送（用 Blob.size 精确计算 UTF-8 字节数）
     if (blob.size <= MAX_BEACON_PAYLOAD) {
       if (isBeaconAvailable) {
-        navigator.sendBeacon(this.reportUrl, blob);
+        navigator.sendBeacon(this.batchUrl, blob);
       } else {
         this.sendKeepalive(json);
       }
@@ -100,10 +114,11 @@ export class LifecycleManager {
     // 超长分片发送
     const chunks = this.chunkEvents(events);
     for (const chunk of chunks) {
-      const chunkJson = JSON.stringify(chunk);
+      const chunkPayload = { events: chunk };
+      const chunkJson = JSON.stringify(chunkPayload);
       const chunkBlob = new Blob([chunkJson], { type: 'application/json' });
       if (isBeaconAvailable) {
-        navigator.sendBeacon(this.reportUrl, chunkBlob);
+        navigator.sendBeacon(this.batchUrl, chunkBlob);
       } else {
         this.sendKeepalive(chunkJson);
       }
@@ -145,7 +160,7 @@ export class LifecycleManager {
    */
   private sendKeepalive(json: string): void {
     try {
-      fetch(this.reportUrl, {
+      fetch(this.batchUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: json,
