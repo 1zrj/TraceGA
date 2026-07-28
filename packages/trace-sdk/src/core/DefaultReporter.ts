@@ -123,7 +123,15 @@ export class DefaultReporter implements TraceReporter {
   }
 
   private pumpJobs(): void {
-    if (this.destroyed || !this.fetchImpl) {
+    if (this.destroyed) {
+      return;
+    }
+
+    if (!this.fetchImpl) {
+      // fetch 不可用但 sendBeacon 可用时，降级使用 sendBeacon 发送
+      if (this.canUseBeacon()) {
+        this.sendJobsWithBeacon();
+      }
       return;
     }
 
@@ -216,6 +224,30 @@ export class DefaultReporter implements TraceReporter {
     }
 
     const unsentJobs: BatchJob[] = [];
+    this.jobQueue.forEach(job => {
+      try {
+        const payload = safeJsonStringify({ events: job.events });
+        const body = new Blob([payload], { type: 'application/json' });
+
+        if (!navigator.sendBeacon(this.batchUrl, body)) {
+          unsentJobs.push(job);
+        }
+      } catch (error) {
+        unsentJobs.push(job);
+        this.handleError(error, 'report.beacon');
+      }
+    });
+
+    this.jobQueue = unsentJobs;
+    if (this.jobQueue.length > 0) {
+      this.scheduleFlush(this.flushInterval);
+    }
+  }
+
+  /** 降级方案：使用 sendBeacon 发送所有 job（pumpJobs 中 fetch 不可用时的兜底） */
+  private sendJobsWithBeacon(): void {
+    const unsentJobs: BatchJob[] = [];
+
     this.jobQueue.forEach(job => {
       try {
         const payload = safeJsonStringify({ events: job.events });

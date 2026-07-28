@@ -214,6 +214,7 @@ export class Reporter {
    */
   destroy(): void {
     this.lifecycle?.destroy();
+    this.limiter?.destroy();
     this.registered = false;
   }
 

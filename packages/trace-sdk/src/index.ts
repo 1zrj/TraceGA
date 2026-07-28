@@ -21,6 +21,7 @@ export const destroy = _core.destroy.bind(_core);
 export { ErrorPlugin } from './plugins/error';
 export { BehaviorPlugin } from './plugins/behavior';
 export { PerformancePlugin } from './plugins/performance';
+export { WhiteScreenPlugin } from './plugins/whiteScreen';
 
 // ===== 插件事件名常量 =====
 export { BehaviorEventName } from './plugins/behavior/types';
@@ -28,15 +29,7 @@ export { ErrorEventName } from './plugins/error/types';
 export { PERFORMANCE_EVENT_NAME, PerformanceMetricName } from './plugins/performance/types';
 
 // ===== 工具函数 =====
-export {
-  deepClone,
-  safeJsonStringify,
-  generateUUID,
-  parseUserAgent,
-  isPlainObject,
-  throttle,
-  debounce,
-} from './utils';
+export { deepClone, safeJsonStringify, generateUUID, parseUserAgent, isPlainObject, throttle, debounce } from './utils';
 
 // ===== 子模块导出（供子路径导入） =====
 export {
@@ -73,6 +66,7 @@ export type {
   ErrorPluginConfig,
   EventPluginConfig,
   PerformancePluginConfig,
+  WhiteScreenPluginConfig,
   BuiltinPluginsConfig,
 } from './types';
 
@@ -99,15 +93,12 @@ export type { ResourceErrorPayload } from './plugins/error/handlers/ResourceErro
 
 export type { PerformanceMetricPayload } from './plugins/performance/types';
 
+export type { WhiteScreenConfig, DetectMethod } from './plugins/whiteScreen';
+
 export type { RouteChange, RouteChangeListener, RouteNavigationType } from './plugins/behavior/routeObserver';
 export type { EnvCollectionOptions } from './core/env';
 export type { ParsedUserAgent } from './utils';
-export type {
-  UrlSanitizeOptions,
-  ElementMetadata,
-  ElementMetadataOptions,
-  MatchedElement,
-} from './plugins/behavior/utils';
+export type { UrlSanitizeOptions, ElementMetadata, ElementMetadataOptions, MatchedElement } from './plugins/behavior/utils';
 
 // ===== 兼容旧版 =====
 import type { TrackEventData as _TrackEventData } from './types';
