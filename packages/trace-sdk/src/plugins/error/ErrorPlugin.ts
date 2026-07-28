@@ -35,13 +35,21 @@ export class ErrorPlugin implements TracePlugin {
     }
 
     for (const handler of this.handlers) {
-      handler.install(core);
+      try {
+        handler.install(core);
+      } catch (error) {
+        this.options.onError?.(error, 'error.install.handler');
+      }
     }
   }
 
   uninstall(): void {
     for (const handler of this.handlers) {
-      handler.uninstall();
+      try {
+        handler.uninstall();
+      } catch {
+        // Ignore individual handler cleanup errors
+      }
     }
     this.handlers = [];
     this.core = null;

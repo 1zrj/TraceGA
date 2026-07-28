@@ -66,6 +66,7 @@ export type {
   ErrorPluginConfig,
   EventPluginConfig,
   PerformancePluginConfig,
+  WhiteScreenPluginConfig,
   BuiltinPluginsConfig,
 } from './types';
 
@@ -92,6 +93,8 @@ export type { ResourceErrorPayload } from './plugins/error/handlers/ResourceErro
 
 export type { PerformanceMetricPayload } from './plugins/performance/types';
 export type { WhiteScreenConfig } from './plugins/whiteScreen';
+
+export type { WhiteScreenConfig, DetectMethod } from './plugins/whiteScreen';
 
 export type { RouteChange, RouteChangeListener, RouteNavigationType } from './plugins/behavior/routeObserver';
 export type { EnvCollectionOptions } from './core/env';

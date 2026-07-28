@@ -554,6 +554,7 @@ export const Dashboard: React.FC = () => {
 
           {/* 可拖拽缩放网格 */}
           <ResponsiveGridLayout
+            key={`grid-${resetKey}`}
             className="layout"
             layouts={initialLayout}
             breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}

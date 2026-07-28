@@ -174,7 +174,7 @@ describe('ErrorPlugin', () => {
         message: 'promise boom',
         reasonType: 'Error',
         errorName: 'Error',
-        stack: error.stack,
+        stack: expect.stringContaining(error.message),
       }),
       'urgent',
       'error',

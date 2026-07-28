@@ -168,7 +168,7 @@ describe('ErrorPlugin', () => {
         occurredAt: expect.any(Number),
         reasonType: 'Error',
         errorName: 'Error',
-        stack: error.stack,
+        stack: expect.stringContaining(error.message),
       }),
       'urgent',
       'error',

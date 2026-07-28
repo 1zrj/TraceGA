@@ -51,7 +51,7 @@ export const ProfilePage: React.FC = () => {
 
       {/* 详细信息 */}
       <Card title="账号信息" style={{ marginBottom: 24 }}>
-        <Descriptions column={1} labelStyle={{ width: 120 }}>
+        <Descriptions column={1} styles={{ label: { width: 120 } }}>
           <Descriptions.Item label="用户名">{userInfo?.username || '-'}</Descriptions.Item>
           <Descriptions.Item label="邮箱">{userInfo?.email || '未设置'}</Descriptions.Item>
           <Descriptions.Item label="角色">Admin</Descriptions.Item>
