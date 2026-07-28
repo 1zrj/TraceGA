@@ -204,13 +204,16 @@ export class DefaultReporter implements TraceReporter {
   }
 
   private flushWithBeacon(): void {
-    if (this.destroyed || !this.canUseBeacon()) {
-      this.flush();
-      return;
-    }
+    if (this.destroyed) return;
 
     this.clearTimer();
     this.createBatchJobs();
+
+    // beacon 不可用时，降级为 fetch + keepalive，避免走 flush() 的 fetchImpl 空判断导致静默丢事件
+    if (!this.canUseBeacon()) {
+      this.sendJobsWithFetch();
+      return;
+    }
 
     const unsentJobs: BatchJob[] = [];
     this.jobQueue.forEach(job => {
@@ -231,5 +234,30 @@ export class DefaultReporter implements TraceReporter {
     if (this.jobQueue.length > 0) {
       this.scheduleFlush(this.flushInterval);
     }
+  }
+
+  /** 降级方案：使用 fetch + keepalive 发送所有 job */
+  private sendJobsWithFetch(): void {
+    if (!this.fetchImpl) {
+      this.handleError(new Error('TraceGA: no transport available (fetch + beacon both missing)'), 'report.transport.unavailable');
+      return;
+    }
+
+    this.jobQueue.forEach(job => {
+      try {
+        this.fetchImpl!(this.batchUrl, {
+          body: safeJsonStringify({ events: job.events }),
+          headers: { 'content-type': 'application/json' },
+          keepalive: true,
+          method: 'POST',
+        }).catch(error => {
+          this.handleError(error, 'report.beacon.fallback');
+        });
+      } catch (error) {
+        this.handleError(error, 'report.beacon.fallback');
+      }
+    });
+
+    this.jobQueue = [];
   }
 }

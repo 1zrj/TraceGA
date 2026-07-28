@@ -1,4 +1,4 @@
-import type { TraceConfig, CommonParams, TrackEventData, EnvInfo } from '../types';
+import type { TraceConfig, CommonParams, TrackEventData, EnvInfo, EventPriority } from '../types';
 import { PriorityScheduler } from '../core/PriorityScheduler';
 import { HttpTransporter } from '../core/HttpTransporter';
 import { LifecycleManager } from '../core/LifecycleManager';
@@ -137,12 +137,13 @@ export class Reporter {
   }
 
   /**
-   * 埋点上报：组装 TrackEventData 并以 normal 优先级入队。
+   * 埋点上报：组装 TrackEventData 并以指定优先级入队。
    *
    * @param eventName - 事件名称
    * @param params - 自定义参数
+   * @param priority - 优先级，默认 'normal'
    */
-  trackEvent(eventName: string, params?: Record<string, any>): void {
+  trackEvent(eventName: string, params?: Record<string, any>, priority: EventPriority = 'normal'): void {
     if (!this.registered) return;
 
     // 采样过滤
@@ -167,7 +168,7 @@ export class Reporter {
       envInfo: this.envInfo,
     };
 
-    this.scheduler.add('normal', event);
+    this.scheduler.add(priority, event);
   }
 
   /**

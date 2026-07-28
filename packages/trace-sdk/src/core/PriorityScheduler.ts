@@ -50,6 +50,7 @@ export class PriorityScheduler {
   private flushing: boolean;
   private persister: StoragePersister | undefined;
   private limiter: ConcurrencyLimiter | undefined;
+  private destroyed = false;
 
   constructor(config: PrioritySchedulerConfig) {
     this.maxBufferSize = config.maxBufferSize;
@@ -118,6 +119,7 @@ export class PriorityScheduler {
    * 销毁调度器，清除定时器、空闲回调并清空所有缓冲区。
    */
   destroy(): void {
+    this.destroyed = true;
     this.clearTimer();
     this.cancelIdle();
     this.urgentBuffer.clear();
@@ -232,7 +234,9 @@ export class PriorityScheduler {
    */
   private async onIdle(_deadline: IdleDeadline): Promise<void> {
     void _deadline;
+    if (this.destroyed) return;
     await this.flushNormalOnly();
+    if (this.destroyed) return;
     this.scheduleIdle();
   }
 
@@ -240,7 +244,9 @@ export class PriorityScheduler {
    * 降级方案的空闲回调（setTimeout 模式）。
    */
   private async onIdleFallback(): Promise<void> {
+    if (this.destroyed) return;
     await this.flushNormalOnly();
+    if (this.destroyed) return;
     this.scheduleIdle();
   }
 
