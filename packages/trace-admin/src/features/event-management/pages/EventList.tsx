@@ -153,8 +153,7 @@ export const EventList: React.FC = () => {
 
   useEffect(() => {
     fetchEvents()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [fetchEvents])
 
   // useRef 持久化 timer，避免 useMemo/useCallback 重建时 timer 丢失
   const fetchTimerRef = useRef<ReturnType<typeof setTimeout>>()

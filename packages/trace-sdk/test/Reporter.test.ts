@@ -6,7 +6,7 @@ describe('Reporter', () => {
   let reporter: Reporter;
   let fetchMock: ReturnType<typeof vi.fn>;
   const baseConfig: TraceConfig = {
-    projectId: 'test_project',
+    appId: 'test_project',
     reportUrl: 'https://api.example.com/report',
     sampleRate: 1,
     maxBufferSize: 5,
