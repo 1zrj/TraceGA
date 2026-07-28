@@ -106,6 +106,41 @@ export class DefaultReporter implements TraceReporter {
     this.jobQueue = [];
   }
 
+  /**
+   * 迁移事件到新 reporter（用于 re-register 场景）。
+   * 取出所有未发送的事件并返回，同时解绑生命周期监听器并标记为已销毁。
+   * 调用方负责将返回的事件写入新 reporter。
+   */
+  drainEvents(): Array<{ event: TrackEventData; priority: EventPriority }> {
+    if (this.destroyed) {
+      return [];
+    }
+
+    this.clearTimer();
+    this.destroyed = true;
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', this.handlePageHide);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+
+    const events: Array<{ event: TrackEventData; priority: EventPriority }> = [];
+    for (const event of this.eventQueue) {
+      events.push({ event, priority: 'normal' });
+    }
+    for (const job of this.jobQueue) {
+      for (const event of job.events) {
+        events.push({ event, priority: 'normal' });
+      }
+    }
+
+    this.eventQueue = [];
+    this.jobQueue = [];
+    return events;
+  }
+
   private captureFetch(): typeof fetch | null {
     if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
       return window.fetch.bind(window);

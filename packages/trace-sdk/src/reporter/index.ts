@@ -12,6 +12,17 @@ const DEFAULT_CONFIG: Partial<TraceConfig> = {
   flushInterval: 5000,
 };
 
+function getBatchUrl(reportUrl: string): string {
+  const baseUrl = typeof window !== 'undefined' && window.location?.href ? window.location.href : 'http://tracega.local/';
+  const parsedUrl = new URL(reportUrl, baseUrl);
+
+  if (!parsedUrl.pathname.endsWith('/batch')) {
+    parsedUrl.pathname = `${parsedUrl.pathname.replace(/\/$/, '')}/batch`;
+  }
+  parsedUrl.hash = '';
+  return parsedUrl.href;
+}
+
 /** 事件钩子类型 */
 type ReporterEvent = 'success' | 'failed' | 'retry';
 type EventCallback = (meta: any) => void;
@@ -68,7 +79,7 @@ export class Reporter {
     this.limiter = new ConcurrencyLimiter(5);
 
     this.transporter = new HttpTransporter({
-      baseURL: this.config.reportUrl,
+      baseURL: getBatchUrl(this.config.reportUrl),
       timeout: 10000,
       persister: this.persister,
     });
@@ -82,7 +93,7 @@ export class Reporter {
       maxBufferSize: this.config.maxBufferSize!,
       flushInterval: this.config.flushInterval!,
       onFlush: async (events: TrackEventData[]) => {
-        await this.transporter.send(events, events.length);
+        await this.transporter.send({ events }, events.length);
       },
       persister: this.persister,
       limiter: this.limiter,
@@ -213,6 +224,13 @@ export class Reporter {
    * 销毁 Reporter 及所有子模块。
    */
   destroy(): void {
+    // 先取出缓冲区剩余事件，fire-and-forget 发送，避免丢失
+    if (this.scheduler) {
+      const remaining = this.scheduler.takeAll();
+      if (remaining.length > 0) {
+        void this.transporter?.send({ events: remaining }, remaining.length);
+      }
+    }
     this.lifecycle?.destroy();
     this.limiter?.destroy();
     this.registered = false;
