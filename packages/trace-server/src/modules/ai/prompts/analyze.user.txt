@@ -1,4 +1,0 @@
-以下是埋点数据：
-{{dataSummary}}
-
-用户的问题是：{{question}}

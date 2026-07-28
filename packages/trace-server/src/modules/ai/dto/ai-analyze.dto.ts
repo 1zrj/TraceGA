@@ -1,9 +1,8 @@
 import { IsString, IsOptional, IsArray } from 'class-validator'
 
 export class AiAnalyzeDto {
-  @IsOptional()
   @IsString()
-  appId?: string
+  appId: string
 
   @IsOptional()
   @IsString()
@@ -20,10 +19,6 @@ export class AiAnalyzeDto {
   @IsOptional()
   @IsString()
   endTime?: string
-
-  @IsOptional()
-  @IsString()
-  prompt?: string
 
   @IsOptional()
   @IsString()
