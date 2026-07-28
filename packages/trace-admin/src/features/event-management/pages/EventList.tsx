@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Table, Button, Space, Modal, Form, Input, Select, message } from 'antd'
 import { getEvents, deleteEvent, createEvent, updateEvent } from '@/api'
 import type { Event } from '@/types'
@@ -153,7 +153,20 @@ export const EventList: React.FC = () => {
 
   useEffect(() => {
     fetchEvents()
-  }, [fetchEvents])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // useRef 持久化 timer，避免 useMemo/useCallback 重建时 timer 丢失
+  const fetchTimerRef = useRef<ReturnType<typeof setTimeout>>()
+
+  const handleValuesChange = useCallback(
+    (values: Record<string, unknown>) => {
+      updateFilters(values)
+      clearTimeout(fetchTimerRef.current)
+      fetchTimerRef.current = setTimeout(fetchEvents, 500)
+    },
+    [updateFilters, fetchEvents],
+  )
 
   return (
     <div>
@@ -176,7 +189,7 @@ export const EventList: React.FC = () => {
         modelValue={filters}
         onSearch={handleSearch}
         onReset={handleReset}
-        onValuesChange={(values) => updateFilters(values)}
+        onValuesChange={handleValuesChange}
       />
 
       <div style={{ marginTop: 16 }}>
