@@ -1,148 +1,292 @@
-import { Injectable } from '@nestjs/common'
-import { ClickHouseService } from '@/database/clickhouse.service'
-import { AnalysisSummaryDto, AnalysisTrendDto, AnalysisFilterDto } from '../dto/analysis.dto'
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@generated/prisma';
+import { PrismaService } from '../../../database/prisma.service';
+import {
+  AnalysisSummaryDto,
+  AnalysisTrendDto,
+  AnalysisFilterDto,
+  AnalyticsOverviewDto,
+  AnalyticsTrendDto,
+  AnalyticsEventTypeTrendDto,
+  AnalyticsTopEventsDto,
+  AnalyticsErrorEventsDto,
+  AnalyticsErrorTrendDto,
+} from '../dto/analysis.dto';
 
 @Injectable()
 export class AnalysisRepository {
-  constructor(private readonly clickHouseService: ClickHouseService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async getSummary(query: AnalysisSummaryDto) {
-    const { appId, startTime, endTime } = query
+    const { appId, startTime, endTime } = query;
 
-    let whereClause = '1=1'
-    const params: Record<string, any> = {}
+    const where: Prisma.event_logWhereInput = this.buildEventLogWhere(appId, startTime, endTime);
 
-    if (appId) {
-      whereClause += ' AND app_id = {appId:String}'
-      params.appId = appId
-    }
+    const [pvResult, uvSubquery, eventNames] = await this.prisma.$transaction([
+      this.prisma.event_log.count({ where }),
+      this.prisma.event_log.findMany({
+        where,
+        select: { uid: true },
+        distinct: ['uid'],
+      }),
+      this.prisma.event_log.findMany({
+        where,
+        select: { event_name: true },
+        distinct: ['event_name'],
+      }),
+    ]);
 
-    if (startTime) {
-      whereClause += ' AND timestamp >= {startTime:DateTime}'
-      params.startTime = startTime
-    }
-
-    if (endTime) {
-      whereClause += ' AND timestamp <= {endTime:DateTime}'
-      params.endTime = endTime
-    }
-
-    const pvQuery = `
-      SELECT count() as pv
-      FROM events
-      WHERE ${whereClause}
-    `
-
-    const uvQuery = `
-      SELECT uniq(user_id) as uv
-      FROM events
-      WHERE ${whereClause}
-    `
-
-    const eventCountQuery = `
-      SELECT count(DISTINCT event_name) as event_count
-      FROM events
-      WHERE ${whereClause}
-    `
-
-    const [pvResult, uvResult, eventCountResult] = await Promise.all([
-      this.clickHouseService.query(pvQuery, params),
-      this.clickHouseService.query(uvQuery, params),
-      this.clickHouseService.query(eventCountQuery, params),
-    ])
+    const uv = uvSubquery.length;
+    const eventCount = eventNames.length;
 
     return {
-      pv: pvResult[0]?.pv || 0,
-      uv: uvResult[0]?.uv || 0,
-      eventCount: eventCountResult[0]?.event_count || 0,
-    }
+      pv: pvResult,
+      uv,
+      eventCount,
+    };
   }
 
   async getTrend(query: AnalysisTrendDto) {
-    const { appId, eventType, startTime, endTime, interval = 'day' } = query
+    const { appId, eventType, startTime, endTime, interval = 'day' } = query;
 
-    let whereClause = '1=1'
-    const params: Record<string, any> = {}
+    const dateFormat = interval === 'hour' ? '%Y-%m-%d %H:00:00' : '%Y-%m-%d';
 
-    if (appId) {
-      whereClause += ' AND app_id = {appId:String}'
-      params.appId = appId
-    }
-
-    if (eventType) {
-      whereClause += ' AND event_type = {eventType:String}'
-      params.eventType = eventType
-    }
-
-    if (startTime) {
-      whereClause += ' AND timestamp >= {startTime:DateTime}'
-      params.startTime = startTime
-    }
-
-    if (endTime) {
-      whereClause += ' AND timestamp <= {endTime:DateTime}'
-      params.endTime = endTime
-    }
-
-    let timeFormat = '%Y-%m-%d'
-    if (interval === 'hour') {
-      timeFormat = '%Y-%m-%d %H:00:00'
-    } else if (interval === 'week') {
-      timeFormat = '%Y-%m-%d'
-    }
-
-    const queryStr = `
-      SELECT
-        formatDateTime(timestamp, '${timeFormat}') as date,
-        count() as pv,
-        uniq(user_id) as uv
-      FROM events
-      WHERE ${whereClause}
+    const result = await this.prisma.$queryRaw`
+      SELECT 
+        DATE_FORMAT(occurred_at, ${dateFormat}) as date,
+        COUNT(*) as pv,
+        COUNT(DISTINCT uid) as uv
+      FROM event_log
+      ${this.buildRawWhere(appId, startTime, endTime, eventType)}
       GROUP BY date
       ORDER BY date ASC
-    `
+    `;
 
-    return this.clickHouseService.query(queryStr, params)
+    return result as Array<{ date: string; pv: number; uv: number }>;
   }
 
   async getFiltered(query: AnalysisFilterDto) {
-    const { appId, eventTypes, startTime, endTime } = query
+    const { appId, eventTypes, startTime, endTime } = query;
 
-    let whereClause = '1=1'
-    const params: Record<string, any> = {}
+    const where = this.buildRawWhere(appId, startTime, endTime);
 
-    if (appId) {
-      whereClause += ' AND app_id = {appId:String}'
-      params.appId = appId
-    }
+    const typeFilter: Prisma.Sql = eventTypes && eventTypes.length > 0 ? Prisma.sql`AND event_type IN (${Prisma.join(eventTypes)})` : Prisma.empty;
 
-    if (eventTypes && eventTypes.length > 0) {
-      whereClause += ' AND event_type IN ({eventTypes:Array(String)})'
-      params.eventTypes = eventTypes
-    }
-
-    if (startTime) {
-      whereClause += ' AND timestamp >= {startTime:DateTime}'
-      params.startTime = startTime
-    }
-
-    if (endTime) {
-      whereClause += ' AND timestamp <= {endTime:DateTime}'
-      params.endTime = endTime
-    }
-
-    const queryStr = `
-      SELECT
+    const result = await this.prisma.$queryRaw`
+      SELECT 
         event_name,
         event_type,
-        count() as count
-      FROM events
-      WHERE ${whereClause}
+        COUNT(*) as count
+      FROM event_log
+      ${where}
+      ${typeFilter}
       GROUP BY event_name, event_type
       ORDER BY count DESC
       LIMIT 100
-    `
+    `;
 
-    return this.clickHouseService.query(queryStr, params)
+    return result as Array<{ event_name: string; event_type: string; count: number }>;
+  }
+
+  async getOverview(query: AnalyticsOverviewDto) {
+    const where = this.buildEventLogWhere(query.appId, query.startTime, query.endTime);
+
+    const [totalEvents, totalUsers] = await this.prisma.$transaction([
+      this.prisma.event_log.count({ where }),
+      this.prisma.event_log.findMany({
+        where,
+        select: { uid: true },
+        distinct: ['uid'],
+      }),
+    ]);
+
+    return {
+      totalEvents,
+      totalUsers: totalUsers.length,
+      avgSessionDuration: 0,
+      conversionRate: totalEvents > 0 ? totalUsers.length / totalEvents : 0,
+    };
+  }
+
+  async getEventTrend(query: AnalyticsTrendDto) {
+    const { appId, startTime, endTime, interval = 'day' } = query;
+    const dateFormat = interval === 'hour' ? '%Y-%m-%d %H:00:00' : '%Y-%m-%d';
+
+    const result = await this.prisma.$queryRaw`
+      SELECT 
+        DATE_FORMAT(occurred_at, ${dateFormat}) as time,
+        COUNT(*) as count
+      FROM event_log
+      ${this.buildRawWhere(appId, startTime, endTime)}
+      GROUP BY time
+      ORDER BY time ASC
+    `;
+
+    return result as Array<{ time: string; count: number }>;
+  }
+
+  async getEventTypeTrend(query: AnalyticsEventTypeTrendDto) {
+    const { appId, startTime, endTime, interval = 'day' } = query;
+
+    const where = this.buildEventLogWhere(appId, startTime, endTime);
+
+    const logs = await this.prisma.event_log.findMany({
+      where,
+      select: { occurred_at: true, event_type: true },
+    });
+
+    const map = new Map<string, Map<string, number>>();
+
+    for (const log of logs) {
+      const d = new Date(log.occurred_at!);
+      const timeKey =
+        interval === 'hour'
+          ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:00:00`
+          : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const type = log.event_type ?? 'unknown';
+
+      if (!map.has(timeKey)) map.set(timeKey, new Map());
+      const typeMap = map.get(timeKey)!;
+      typeMap.set(type, (typeMap.get(type) ?? 0) + 1);
+    }
+
+    const result: Array<{ time: string; type: string; count: number }> = [];
+    for (const [time, typeMap] of map) {
+      for (const [type, count] of typeMap) {
+        result.push({ time, type, count });
+      }
+    }
+
+    return result.sort((a, b) => a.time.localeCompare(b.time) || a.type.localeCompare(b.type));
+  }
+
+  async getTopEvents(query: AnalyticsTopEventsDto) {
+    const { appId, startTime, endTime, limit = 10 } = query;
+    const where = this.buildEventLogWhere(appId, startTime, endTime);
+
+    const totalEvents = await this.prisma.event_log.count({ where });
+
+    const raw = await this.prisma.event_log.groupBy({
+      by: ['event_name'],
+      where,
+      _count: { event_name: true },
+      orderBy: { _count: { event_name: 'desc' } },
+      take: limit,
+    });
+
+    return raw.map(item => ({
+      name: item.event_name,
+      count: item._count.event_name,
+      percentage: totalEvents > 0 ? Number(((item._count.event_name / totalEvents) * 100).toFixed(2)) : 0,
+    }));
+  }
+
+  async getConversionRate(query: AnalyticsOverviewDto) {
+    const where = this.buildEventLogWhere(query.appId, query.startTime, query.endTime);
+
+    const [totalEvents, totalUsers] = await this.prisma.$transaction([
+      this.prisma.event_log.count({ where }),
+      this.prisma.event_log.findMany({
+        where,
+        select: { uid: true },
+        distinct: ['uid'],
+      }),
+    ]);
+
+    return { rate: totalEvents > 0 ? Number(((totalUsers.length / totalEvents) * 100).toFixed(2)) : 0 };
+  }
+
+  async getErrorEvents(query: AnalyticsErrorEventsDto) {
+    const { appId, startTime, endTime } = query;
+
+    const where: Prisma.event_logWhereInput = {
+      event_type: 'error',
+      ...this.buildEventLogWhere(appId, startTime, endTime),
+    };
+
+    const logs = await this.prisma.event_log.findMany({
+      where,
+      orderBy: { occurred_at: 'desc' },
+      take: 50,
+    });
+
+    return logs.map(log => {
+      const params = log.event_params as Record<string, unknown> | null;
+      return {
+        id: String(log.id),
+        type: (params?.type as string) ?? 'js-error',
+        message: (params?.message as string) ?? '',
+        errorName: (params?.errorName as string) ?? (params?.name as string) ?? 'Unknown',
+        occurredAt: log.occurred_at ? new Date(log.occurred_at).toISOString().replace('T', ' ').slice(0, 19) : '',
+        duration: (params?.duration as number) ?? 0,
+        url: log.page_url ?? '',
+        status: 'active' as const,
+      };
+    });
+  }
+
+  async getErrorTrend(query: AnalyticsErrorTrendDto) {
+    const { appId, startTime, endTime } = query;
+
+    const where = this.buildRawWhere(appId, startTime, endTime, 'error');
+
+    const result = await this.prisma.$queryRaw`
+      SELECT 
+        DATE_FORMAT(occurred_at, '%Y-%m-%d') as time,
+        COUNT(*) as count
+      FROM event_log
+      ${where}
+      GROUP BY time
+      ORDER BY time ASC
+    `;
+
+    return result as Array<{ time: string; count: number }>;
+  }
+
+  private buildEventLogWhere(appId?: string, startTime?: string, endTime?: string): Prisma.event_logWhereInput {
+    const where: Prisma.event_logWhereInput = {};
+
+    if (appId) {
+      where.project_id = appId;
+    }
+
+    const dateFilter: Prisma.DateTimeFilter = {};
+    if (startTime) {
+      dateFilter.gte = new Date(startTime);
+    }
+    if (endTime) {
+      dateFilter.lte = new Date(endTime);
+    }
+    if (Object.keys(dateFilter).length > 0) {
+      where.occurred_at = dateFilter;
+    }
+
+    return where;
+  }
+
+  private buildRawWhere(appId?: string, startTime?: string, endTime?: string, eventType?: string): Prisma.Sql {
+    const conditions: Prisma.Sql[] = [];
+
+    if (appId) {
+      conditions.push(Prisma.sql`project_id = ${appId}`);
+    }
+
+    if (startTime) {
+      conditions.push(Prisma.sql`occurred_at >= ${new Date(startTime)}`);
+    }
+
+    if (endTime) {
+      conditions.push(Prisma.sql`occurred_at <= ${new Date(endTime)}`);
+    }
+
+    if (eventType) {
+      conditions.push(Prisma.sql`event_type = ${eventType}`);
+    }
+
+    if (conditions.length === 0) {
+      return Prisma.empty;
+    }
+
+    return Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
   }
 }

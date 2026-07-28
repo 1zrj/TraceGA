@@ -1,27 +1,23 @@
-import { IsString, IsOptional, IsObject } from 'class-validator'
+import { IsString, IsOptional, IsObject } from 'class-validator';
 
 export class UpdateEventDto {
   @IsOptional()
   @IsString()
-  eventName?: string
+  eventName?: string;
 
   @IsOptional()
   @IsString()
-  eventType?: string
+  eventType?: string;
 
   @IsOptional()
   @IsString()
-  category?: string
-
-  @IsOptional()
-  @IsString()
-  description?: string
+  description?: string;
 
   @IsOptional()
   @IsObject()
-  propertySchema?: Record<string, any>
+  propertySchema?: Record<string, any>;
 
   @IsOptional()
   @IsString()
-  appId?: string
+  appId?: string;
 }

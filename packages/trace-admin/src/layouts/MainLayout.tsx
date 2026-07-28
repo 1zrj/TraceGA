@@ -3,7 +3,6 @@ import { Layout, Menu } from 'antd'
 import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
 import { useAppStore } from '@/store'
-
 const { Header, Sider, Content } = Layout
 
 const menuItems = [
@@ -78,7 +77,7 @@ export const MainLayout: React.FC = () => {
               <MenuFoldOutlined style={{ fontSize: 20, color: '#64748b' }} />
             )}
           </button>
-          <span style={{ fontSize: 14, color: '#475569' }}>{userInfo?.name}</span>
+          <span style={{ fontSize: 14, color: '#475569' }}>{userInfo?.username}</span>
         </Header>
         <Content
           style={{
@@ -95,4 +94,3 @@ export const MainLayout: React.FC = () => {
     </Layout>
   )
 }
-

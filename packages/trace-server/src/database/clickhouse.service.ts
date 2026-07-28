@@ -1,40 +1,63 @@
-import { Injectable, OnModuleInit } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
-import { createClient, ClickHouseClient } from '@clickhouse/client'
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { createClient } from '@clickhouse/client';
 
 @Injectable()
-export class ClickHouseService implements OnModuleInit {
-  private client: ClickHouseClient
+export class ClickHouseService implements OnModuleInit, OnModuleDestroy {
+  private client: ReturnType<typeof createClient> | null = null;
 
-  constructor(private configService: ConfigService) {}
+  async onModuleInit() {
+    const host = process.env.CLICKHOUSE_HOST || 'localhost';
+    const port = process.env.CLICKHOUSE_PORT || '8123';
+    const database = process.env.CLICKHOUSE_DATABASE || 'default';
 
-  onModuleInit() {
     this.client = createClient({
-      host: `http://${this.configService.get('CLICKHOUSE_HOST', 'localhost')}:${this.configService.get('CLICKHOUSE_PORT', 8123)}`,
-      username: this.configService.get('CLICKHOUSE_USER', 'default'),
-      password: this.configService.get('CLICKHOUSE_PASSWORD', ''),
-      database: this.configService.get('CLICKHOUSE_DATABASE', 'tracega'),
-    })
+      host: `http://${host}:${port}`,
+      database,
+    });
   }
 
-  getClient(): ClickHouseClient {
-    return this.client
+  async onModuleDestroy() {
+    if (this.client) {
+      await this.client.close();
+    }
   }
 
-  async query<T = any>(query: string, params?: Record<string, any>): Promise<T[]> {
+  async query<T = any>(sql: string, params?: Record<string, any>): Promise<T[]> {
+    if (!this.client) {
+      throw new Error('ClickHouse client not initialized');
+    }
+
     const result = await this.client.query({
-      query,
+      query: sql,
       query_params: params,
-      format: 'JSONEachRow',
-    })
-    return (await result.json()) as T[]
+      format: 'JSON',
+    });
+
+    const data = (await result.json()) as { data?: T[] };
+    return data.data || [];
   }
 
-  async insert(table: string, data: Record<string, any>[]): Promise<void> {
-    await this.client.insert({
-      table,
-      values: data,
-      format: 'JSONEachRow',
-    })
+  async insert<T = any>(table: string, data: T[]): Promise<void> {
+    if (!this.client || data.length === 0) {
+      return;
+    }
+
+    const columns = Object.keys(data[0]);
+    const values = data
+      .map(row => {
+        return columns
+          .map(col => {
+            const value = row[col as keyof T];
+            if (value === null || value === undefined) return 'NULL';
+            if (typeof value === 'string') return `'${value.replace(/'/g, "\\'")}'`;
+            if (typeof value === 'object') return `'${JSON.stringify(value)}'`;
+            return value;
+          })
+          .join(', ');
+      })
+      .join('), (');
+
+    const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values})`;
+    await this.client.command({ query: sql });
   }
 }

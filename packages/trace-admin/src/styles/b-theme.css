@@ -1,0 +1,33 @@
+/* 
+   B 端主题（运营后台）
+   选择器：[data-theme="b"]
+    */
+
+[data-theme='b'] {
+  /* ── 基础尺寸 ────────────────────────────────────────────── */
+  --tk-font-size-base: 14px;
+  --tk-radius-default: 6px;
+  --tk-control-height: 32px;
+
+  /* ── 组件圆角 ────────────────────────────────────────────── */
+  --tk-btn-radius: 4px;
+  --tk-input-radius: 4px;
+  --tk-select-radius: 4px;
+  --tk-card-radius: 6px;
+  --tk-modal-radius-lg: 8px;
+  --tk-tag-radius: 2px;
+
+  /* ── Modal ──────────────────────────────────────────────── */
+  --tk-modal-title-font-size: 18px;
+
+  /* ── Table ──────────────────────────────────────────────── */
+  --tk-table-cell-padding-block: 12px;
+  --tk-table-cell-padding-inline: 16px;
+
+  /* ── Layout ─────────────────────────────────────────────── */
+  --tk-content-padding: 24px;
+
+  /* ── B 端特有：斑马纹开启、行悬停高亮 ───────────────────── */
+  --tk-table-striped: rgba(0, 0, 0, 0.02);
+  --tk-table-row-hover: rgba(0, 0, 0, 0.04);
+}

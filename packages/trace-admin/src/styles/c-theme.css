@@ -1,0 +1,33 @@
+/* 
+   C 端主题（客户看板）
+   选择器：[data-theme="c"]
+    */
+
+[data-theme='c'] {
+  /* ── 基础尺寸 ────────────────────────────────────────────── */
+  --tk-font-size-base: 16px;
+  --tk-radius-default: 8px;
+  --tk-control-height: 40px;
+
+  /* ── 组件圆角（C 端普遍更大） ────────────────────────────── */
+  --tk-btn-radius: 8px;
+  --tk-input-radius: 8px;
+  --tk-select-radius: 8px;
+  --tk-card-radius: 8px;
+  --tk-modal-radius-lg: 12px;
+  --tk-tag-radius: 4px;
+
+  /* ── Modal ──────────────────────────────────────────────── */
+  --tk-modal-title-font-size: 20px;
+
+  /* ── Table ──────────────────────────────────────────────── */
+  --tk-table-cell-padding-block: 16px;
+  --tk-table-cell-padding-inline: 24px;
+
+  /* ── Layout ─────────────────────────────────────────────── */
+  --tk-content-padding: 32px;
+
+  /* ── C 端特有：无斑马纹、更干净 ─────────────────────────── */
+  --tk-table-striped: transparent;
+  --tk-table-row-hover: rgba(22, 119, 255, 0.04);
+}

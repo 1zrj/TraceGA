@@ -1,9 +1,13 @@
 node_modules/
 dist/
+packages/trace-server/src/generated/
 build/
+*.tsbuildinfo
 .vite/
 .idea/
 *.log
 .env
 .env.local
 .DS_Store
+package-lock.json
+yarn.lock

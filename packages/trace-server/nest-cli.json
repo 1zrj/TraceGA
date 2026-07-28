@@ -3,6 +3,13 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": false,
+    "assets": [
+      {
+        "include": "**/prompts/*.txt",
+        "outDir": "dist",
+        "watchAssets": true
+      }
+    ]
   }
 }

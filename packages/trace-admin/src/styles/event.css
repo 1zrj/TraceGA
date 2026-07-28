@@ -1,0 +1,9 @@
+/* 全局样式 - 组员B */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #f0f2f5; color: #333; -webkit-font-smoothing: antialiased;
+}
+.ant-table-wrapper { padding: 0 16px 16px; }
+.ant-card { border-radius: 8px; }
+.ant-table-row:hover { background: #f5f8ff !important; }
