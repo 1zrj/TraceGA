@@ -14,6 +14,7 @@ import type {
 import { ErrorPlugin } from '../plugins/error/ErrorPlugin';
 import { BehaviorPlugin } from '../plugins/behavior/BehaviorPlugin';
 import { PerformancePlugin } from '../plugins/performance/PerformancePlugin';
+import { WhiteScreenPlugin } from '../plugins/whiteScreen/WhiteScreenPlugin';
 import { deepClone, isPlainObject } from '../utils';
 import { DefaultReporter } from './DefaultReporter';
 import { collectEnvInfo, refreshEnvInfo } from './env';
@@ -41,6 +42,7 @@ export class TraceCore implements ITraceCore {
   private errorPlugin: ErrorPlugin | null = null;
   private behaviorPlugin: BehaviorPlugin | null = null;
   private performancePlugin: PerformancePlugin | null = null;
+  private whiteScreenPlugin: WhiteScreenPlugin | null = null;
 
   register(config: TraceConfig): void {
     let hooks: TraceLifecycleHooks | undefined;
@@ -65,6 +67,7 @@ export class TraceCore implements ITraceCore {
         errorPlugin: this.resolvePluginConfig(config.errorPlugin, 'errorPlugin'),
         eventPlugin: this.resolvePluginConfig(config.eventPlugin, 'eventPlugin'),
         performancePlugin: this.resolvePluginConfig(config.performancePlugin, 'performancePlugin'),
+        whiteScreenPlugin: this.resolvePluginConfig(config.whiteScreenPlugin, 'whiteScreenPlugin'),
         hooks: Object.freeze(hooks),
       }) as ResolvedTraceConfig;
 
@@ -107,12 +110,7 @@ export class TraceCore implements ITraceCore {
   // Supports two signatures:
   // New: trackEvent(eventName, params?, priority?, eventType?)
   // Old (compat): trackEvent(eventType, eventName, params?)
-  trackEvent(
-    arg1: string,
-    arg2: TrackEventParams | string = {},
-    arg3: EventPriority | TrackEventParams = 'normal',
-    arg4: EventType = 'custom',
-  ): void {
+  trackEvent(arg1: string, arg2: TrackEventParams | string = {}, arg3: EventPriority | TrackEventParams = 'normal', arg4: EventType = 'custom'): void {
     try {
       let eventName: string;
       let params: TrackEventParams;
@@ -651,11 +649,18 @@ export class TraceCore implements ITraceCore {
       this.performancePlugin = new PerformancePlugin(config.performancePlugin);
       this.performancePlugin.install(this);
     }
+
+    if (config.plugins.whiteScreen) {
+      this.whiteScreenPlugin = new WhiteScreenPlugin(config.whiteScreenPlugin);
+      this.whiteScreenPlugin.install(this);
+    }
   }
 
   private disposeBuiltinPlugins(): void {
     this.performancePlugin?.uninstall();
     this.performancePlugin = null;
+    this.whiteScreenPlugin?.uninstall();
+    this.whiteScreenPlugin = null;
     this.behaviorPlugin?.uninstall();
     this.behaviorPlugin = null;
     this.errorPlugin?.uninstall();

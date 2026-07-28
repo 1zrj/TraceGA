@@ -6,7 +6,7 @@ export type EventPriority = 'urgent' | 'high' | 'normal';
 
 export type EventType = 'custom' | 'click' | 'page_view' | 'exposure' | 'error' | 'performance' | (string & Record<never, never>);
 
-export type BuiltinPluginName = 'error' | 'event' | 'performance';
+export type BuiltinPluginName = 'error' | 'event' | 'performance' | 'whiteScreen';
 
 export type BuiltinPluginsConfig = Partial<Record<BuiltinPluginName, boolean>>;
 
@@ -28,6 +28,19 @@ export interface PerformancePluginConfig {
   resource?: boolean;
 }
 
+export interface WhiteScreenPluginConfig {
+  /** 可视元素数量阈值，低于此值判定为白屏，默认 2 */
+  threshold?: number;
+  /** 采样率 0-1，默认 1 */
+  sampleRate?: number;
+  /** 是否启用像素对比增强检测，默认 false */
+  enablePixelCompare?: boolean;
+  /** 像素对比方差阈值，默认 100 */
+  pixelVarianceThreshold?: number;
+  /** 多轮检测时间点（毫秒），默认 [3000, 6000, 10000] */
+  detectRounds?: number[];
+}
+
 export interface TraceConfig {
   projectId: string;
   reportUrl: string;
@@ -43,6 +56,7 @@ export interface TraceConfig {
   errorPlugin?: ErrorPluginConfig;
   eventPlugin?: EventPluginConfig;
   performancePlugin?: PerformancePluginConfig;
+  whiteScreenPlugin?: WhiteScreenPluginConfig;
   hooks?: TraceLifecycleHooks;
 }
 
@@ -61,6 +75,7 @@ export interface ResolvedTraceConfig {
   errorPlugin: Readonly<ErrorPluginConfig>;
   eventPlugin: Readonly<EventPluginConfig>;
   performancePlugin: Readonly<PerformancePluginConfig>;
+  whiteScreenPlugin: Readonly<WhiteScreenPluginConfig>;
   hooks: TraceLifecycleHooks;
 }
 
