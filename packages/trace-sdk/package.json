@@ -46,6 +46,7 @@
   ],
   "scripts": {
     "dev": "rollup -c -w",
+    "dev:debug": "npx serve . -p 4000",
     "build": "rollup -c",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "prepack": "pnpm clean && pnpm build && pnpm test",

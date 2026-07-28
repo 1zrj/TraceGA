@@ -158,7 +158,7 @@ export class Reporter {
     } = {
       eventType: 'custom',
       eventName,
-      appId: this.config.projectId,
+      appId: this.config.appId,
       properties: { ...this.commonParams, ...(params ?? {}) },
       timestamp: Date.now(),
       url: this.envInfo.url,

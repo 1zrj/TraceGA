@@ -32,6 +32,7 @@ function createMockCore(overrides: Partial<ITraceCore> = {}): ITraceCore {
     getEnvInfo: vi.fn().mockReturnValue(null),
     getConfig: vi.fn().mockReturnValue(null),
     setReporter: vi.fn(),
+    flush: vi.fn(),
     destroy: vi.fn(),
     ...overrides,
   };

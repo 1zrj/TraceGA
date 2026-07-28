@@ -86,6 +86,38 @@ export class DefaultReporter implements TraceReporter {
     this.pumpJobs();
   }
 
+  /** 清空队列、销毁 reporter，返回未发送的事件列表 */
+  drainEvents(): Array<{ event: TrackEventData; priority: EventPriority }> {
+    this.clearTimer();
+
+    const drained: Array<{ event: TrackEventData; priority: EventPriority }> = [];
+
+    // 收集 eventQueue 中的事件
+    while (this.eventQueue.length > 0) {
+      const event = this.eventQueue.shift()!;
+      drained.push({ event, priority: 'normal' });
+    }
+
+    // 收集 jobQueue 中的事件
+    while (this.jobQueue.length > 0) {
+      const job = this.jobQueue.shift()!;
+      job.events.forEach(event => {
+        drained.push({ event, priority: 'normal' });
+      });
+    }
+
+    this.destroyed = true;
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', this.handlePageHide);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+
+    return drained;
+  }
+
   destroy(): void {
     if (this.destroyed) {
       return;
@@ -165,6 +197,19 @@ export class DefaultReporter implements TraceReporter {
 
       if (!response.ok) {
         throw new Error(`TraceGA report failed with status ${response.status}`);
+      }
+
+      // 批量接口即使业务失败也返回 200，需解析响应体检查
+      try {
+        const body = await response.clone().json();
+        if (body && typeof body === 'object' && body.failedCount > 0) {
+          const reasons = Array.isArray(body.failures)
+            ? body.failures.map((f: { reason?: string; index?: number }) => `${f.index ?? '?'}:${f.reason ?? 'unknown'}`).join('; ')
+            : `failedCount=${body.failedCount}`;
+          this.handleError(new Error(`TraceGA batch partial failure: ${reasons}`), 'report.transport');
+        }
+      } catch {
+        // 非 JSON 响应或解析失败忽略，正常业务下不应出现
       }
     } catch (error) {
       if (!this.destroyed && job.attempts < MAX_RETRY_ATTEMPTS) {

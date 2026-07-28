@@ -53,7 +53,7 @@ export class TraceCore implements ITraceCore {
 
       const resolvedConfig = Object.freeze({
         ...DEFAULT_CONFIG,
-        projectId: this.resolveProjectId(config),
+        appId: this.resolveAppId(config),
         reportUrl: config.reportUrl.trim(),
         sampleRate: this.resolveSampleRate(config.sampleRate, DEFAULT_CONFIG.sampleRate),
         maxBufferSize: this.resolveBufferSize(config.maxBufferSize, DEFAULT_CONFIG.maxBufferSize),
@@ -158,7 +158,7 @@ export class TraceCore implements ITraceCore {
       let event: TrackEventData = {
         eventType: normalizedEventType,
         eventName: normalizedEventName,
-        appId: this.config.projectId,
+        appId: this.config.appId,
         userId: this.readIdentity(commonParams, ['userId', 'user_id']),
         sessionId: this.readIdentity(commonParams, ['sessionId', 'session_id']),
         properties,
@@ -275,6 +275,14 @@ export class TraceCore implements ITraceCore {
       this.reporter = reporter;
     } catch (error) {
       this.handleError(error, 'setReporter');
+    }
+  }
+
+  flush(): void {
+    try {
+      this.reporter?.flush?.();
+    } catch (error) {
+      this.handleError(error, 'flush');
     }
   }
 
@@ -452,9 +460,9 @@ export class TraceCore implements ITraceCore {
       throw new TypeError('config is required');
     }
 
-    const projectId = (config.projectId || config.appId || '').trim();
-    if (!projectId) {
-      throw new TypeError('projectId or appId must be a non-empty string');
+    const appId = (config.appId || config.projectId || '').trim();
+    if (!appId) {
+      throw new TypeError('appId must be a non-empty string');
     }
     if (typeof config.reportUrl !== 'string' || !config.reportUrl.trim()) {
       throw new TypeError('reportUrl must be a non-empty string');
@@ -465,14 +473,14 @@ export class TraceCore implements ITraceCore {
       throw new TypeError('reportUrl must use http or https');
     }
 
-    if (config.projectId && config.appId && config.projectId !== config.appId && config.enableDebug) {
+    if (config.appId && config.projectId && config.appId !== config.projectId && config.enableDebug) {
       // eslint-disable-next-line no-console
-      console.warn('[TraceGA] Both projectId and appId provided; projectId takes precedence.');
+      console.warn('[TraceGA] Both appId and projectId provided; appId takes precedence.');
     }
   }
 
-  private resolveProjectId(config: TraceConfig): string {
-    return (config.projectId || config.appId || '').trim();
+  private resolveAppId(config: TraceConfig): string {
+    return (config.appId || config.projectId || '').trim();
   }
 
   private resolveHooks(config: unknown): TraceLifecycleHooks {

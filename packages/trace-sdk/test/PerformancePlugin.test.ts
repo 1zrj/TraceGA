@@ -96,12 +96,12 @@ describe('PerformancePlugin', () => {
         name: 'layout-shift',
         value: 0.1,
         hadRecentInput: false,
-      } as PerformanceEntry,
+      } as unknown as PerformanceEntry,
       {
         name: 'layout-shift',
         value: 0.2,
         hadRecentInput: true,
-      } as PerformanceEntry,
+      } as unknown as PerformanceEntry,
     ]);
 
     expect(core.trackEvent).toHaveBeenCalledWith(
@@ -144,7 +144,7 @@ describe('PerformancePlugin', () => {
     core.setReporter(reporter);
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
       plugins: {
         performance: true,
