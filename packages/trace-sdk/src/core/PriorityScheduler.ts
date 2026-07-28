@@ -184,6 +184,7 @@ export class PriorityScheduler {
     } catch {
       // 上报失败已在 transporter 中处理
     }
+    if (this.destroyed) return;
     this.scheduleNext();
   }
 
@@ -197,6 +198,7 @@ export class PriorityScheduler {
     } catch {
       // 上报失败已在 transporter 中处理
     }
+    if (this.destroyed) return;
     this.scheduleNext();
   }
 
