@@ -15,6 +15,7 @@ export const setUser = _core.setUser.bind(_core);
 export const getEnvInfo = _core.getEnvInfo.bind(_core);
 export const getConfig = _core.getConfig.bind(_core);
 export const setReporter = _core.setReporter.bind(_core);
+export const flush = _core.flush.bind(_core);
 export const destroy = _core.destroy.bind(_core);
 
 // ===== 插件 =====
@@ -66,6 +67,7 @@ export type {
   ErrorPluginConfig,
   EventPluginConfig,
   PerformancePluginConfig,
+  WhiteScreenPluginConfig,
   BuiltinPluginsConfig,
 } from './types';
 
@@ -91,7 +93,7 @@ export type { PromiseErrorPayload } from './plugins/error/handlers/PromiseErrorH
 export type { ResourceErrorPayload } from './plugins/error/handlers/ResourceErrorHandler';
 
 export type { PerformanceMetricPayload } from './plugins/performance/types';
-export type { WhiteScreenConfig } from './plugins/whiteScreen';
+export type { WhiteScreenConfig, DetectMethod } from './plugins/whiteScreen';
 
 export type { RouteChange, RouteChangeListener, RouteNavigationType } from './plugins/behavior/routeObserver';
 export type { EnvCollectionOptions } from './core/env';

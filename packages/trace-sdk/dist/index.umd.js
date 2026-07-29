@@ -7,41 +7,61 @@
   class EventBuffer {
     constructor(maxSize) {
       this.items = [];
+      this.head = 0;
       this.maxSize = maxSize;
     }
     /**
-     * 向缓冲区添加一条事件。若已满则丢弃最早的事件。
+     * 向缓冲区添加一条数据。
+     * 若当前数量已达到最大容量，会先移除最旧的一条数据（O(1)），再添加新数据。
+     *
+     * @param item - 待添加的数据
      */
-    push(event) {
-      if (this.items.length >= this.maxSize) {
-        this.items.shift();
+    push(item) {
+      if (this.size() >= this.maxSize) {
+        this.head++;
       }
-      this.items.push(event);
+      this.items.push(item);
     }
     /**
-     * 取出全部事件并清空缓冲区。
+     * 移除并返回缓冲区中最旧的一条数据（O(1)）。
+     *
+     * @returns 最旧的数据，若缓冲区为空则返回 `undefined`
      */
-    takeAll() {
-      const result = this.items;
-      this.items = [];
-      return result;
+    pop() {
+      if (this.head >= this.items.length)
+        return void 0;
+      return this.items[this.head++];
     }
     /**
      * 当前缓冲区中的事件数。
      */
     size() {
-      return this.items.length;
+      return this.items.length - this.head;
     }
     /**
      * 清空缓冲区。
      */
     clear() {
       this.items = [];
+      this.head = 0;
+    }
+    /**
+     * 取出缓冲区中全部数据并以数组形式返回，同时清空缓冲区。
+     * 适用于批量上报场景。
+     *
+     * @returns 包含缓冲区中所有数据的数组（按入队顺序排列）
+     */
+    takeAll() {
+      const all = this.items.slice(this.head);
+      this.items = [];
+      this.head = 0;
+      return all;
     }
   }
 
   class PriorityScheduler {
     constructor(config) {
+      this.destroyed = false;
       var _a, _b;
       this.maxBufferSize = config.maxBufferSize;
       this.urgentMaxSize = (_a = config.urgentMaxSize) != null ? _a : config.maxBufferSize;
@@ -101,6 +121,7 @@
      * 销毁调度器，清除定时器、空闲回调并清空所有缓冲区。
      */
     destroy() {
+      this.destroyed = true;
       this.clearTimer();
       this.cancelIdle();
       this.urgentBuffer.clear();
@@ -154,6 +175,8 @@
         await this.doFlush();
       } catch (e) {
       }
+      if (this.destroyed)
+        return;
       this.scheduleNext();
     }
     /**
@@ -165,6 +188,8 @@
         await this.doFlush();
       } catch (e) {
       }
+      if (this.destroyed)
+        return;
       this.scheduleNext();
     }
     // ─── 空闲调度 ──────────────────────────────────────
@@ -197,14 +222,22 @@
      * 空闲回调：仅取出 normal 队列数据上报，upper 级别不受影响。
      */
     async onIdle(_deadline) {
+      if (this.destroyed)
+        return;
       await this.flushNormalOnly();
+      if (this.destroyed)
+        return;
       this.scheduleIdle();
     }
     /**
      * 降级方案的空闲回调（setTimeout 模式）。
      */
     async onIdleFallback() {
+      if (this.destroyed)
+        return;
       await this.flushNormalOnly();
+      if (this.destroyed)
+        return;
       this.scheduleIdle();
     }
     /**
@@ -470,9 +503,10 @@
     sendWithBeacon(events) {
       const isBeaconAvailable = typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function";
       const json = JSON.stringify(events);
-      if (json.length <= MAX_BEACON_PAYLOAD) {
+      const blob = new Blob([json], { type: "application/json" });
+      if (blob.size <= MAX_BEACON_PAYLOAD) {
         if (isBeaconAvailable) {
-          navigator.sendBeacon(this.reportUrl, new Blob([json], { type: "application/json" }));
+          navigator.sendBeacon(this.reportUrl, blob);
         } else {
           this.sendKeepalive(json);
         }
@@ -481,8 +515,9 @@
       const chunks = this.chunkEvents(events);
       for (const chunk of chunks) {
         const chunkJson = JSON.stringify(chunk);
+        const chunkBlob = new Blob([chunkJson], { type: "application/json" });
         if (isBeaconAvailable) {
-          navigator.sendBeacon(this.reportUrl, new Blob([chunkJson], { type: "application/json" }));
+          navigator.sendBeacon(this.reportUrl, chunkBlob);
         } else {
           this.sendKeepalive(chunkJson);
         }
@@ -497,7 +532,7 @@
       let current = [];
       let currentSize = 0;
       for (const event of events) {
-        const eventSize = JSON.stringify(event).length;
+        const eventSize = new Blob([JSON.stringify(event)], { type: "application/json" }).size;
         if (currentSize + eventSize > MAX_BEACON_PAYLOAD && current.length > 0) {
           chunks.push(current);
           current = [];
@@ -633,6 +668,13 @@
       }
     }
     /**
+     * 销毁并发限制器，清空等待队列并重置活跃计数。
+     */
+    destroy() {
+      this.waitQueue = [];
+      this.active = 0;
+    }
+    /**
      * 返回当前活跃的请求数。
      */
     getActiveCount() {
@@ -736,12 +778,13 @@
       }
     }
     /**
-     * 埋点上报：组装 TrackEventData 并以 normal 优先级入队。
+     * 埋点上报：组装 TrackEventData 并以指定优先级入队。
      *
      * @param eventName - 事件名称
      * @param params - 自定义参数
+     * @param priority - 优先级，默认 'normal'
      */
-    trackEvent(eventName, params) {
+    trackEvent(eventName, params, priority = "normal") {
       if (!this.registered)
         return;
       if (this.config.sampleRate !== void 0 && this.config.sampleRate < 1 && Math.random() > this.config.sampleRate) {
@@ -750,7 +793,7 @@
       const event = {
         eventType: "custom",
         eventName,
-        appId: this.config.projectId,
+        appId: this.config.appId,
         properties: { ...this.commonParams, ...params != null ? params : {} },
         timestamp: Date.now(),
         url: this.envInfo.url,
@@ -759,7 +802,7 @@
         commonParams: { ...this.commonParams },
         envInfo: this.envInfo
       };
-      this.scheduler.add("normal", event);
+      this.scheduler.add(priority, event);
     }
     /**
      * 添加公共参数，后续所有 trackEvent 调用都会携带。
@@ -799,8 +842,9 @@
      * 销毁 Reporter 及所有子模块。
      */
     destroy() {
-      var _a;
+      var _a, _b;
       (_a = this.lifecycle) == null ? void 0 : _a.destroy();
+      (_b = this.limiter) == null ? void 0 : _b.destroy();
       this.registered = false;
     }
     /**
@@ -1692,6 +1736,7 @@
       this.options = options != null ? options : {};
     }
     install(core) {
+      var _a, _b;
       this.core = core;
       const cfg = this.options;
       if (cfg.js !== false) {
@@ -1707,12 +1752,19 @@
         this.handlers.push(new HttpErrorHandler(cfg.reportUrl));
       }
       for (const handler of this.handlers) {
-        handler.install(core);
+        try {
+          handler.install(core);
+        } catch (error) {
+          (_b = (_a = this.options).onError) == null ? void 0 : _b.call(_a, error, "error.install.handler");
+        }
       }
     }
     uninstall() {
       for (const handler of this.handlers) {
-        handler.uninstall();
+        try {
+          handler.uninstall();
+        } catch (e) {
+        }
       }
       this.handlers = [];
       this.core = null;
@@ -2651,757 +2703,11 @@
     }
   }
 
-  const MAX_RETRY_ATTEMPTS = 2;
-  function getBatchUrl(reportUrl) {
-    var _a;
-    const baseUrl = typeof window !== "undefined" && ((_a = window.location) == null ? void 0 : _a.href) ? window.location.href : "http://tracega.local/";
-    const parsedUrl = new URL(reportUrl, baseUrl);
-    if (!parsedUrl.pathname.endsWith("/batch")) {
-      parsedUrl.pathname = `${parsedUrl.pathname.replace(/\/$/, "")}/batch`;
-    }
-    parsedUrl.hash = "";
-    return parsedUrl.href;
-  }
-  class DefaultReporter {
-    constructor(config, handleError) {
-      this.handleError = handleError;
-      this.eventQueue = [];
-      this.jobQueue = [];
-      this.activeJobs = 0;
-      this.timer = null;
-      this.destroyed = false;
-      this.transportUnavailableReported = false;
-      this.handlePageHide = () => {
-        this.flushWithBeacon();
-      };
-      this.handleVisibilityChange = () => {
-        if (document.visibilityState === "hidden") {
-          this.flushWithBeacon();
-        }
-      };
-      this.batchUrl = getBatchUrl(config.reportUrl);
-      this.maxBufferSize = config.maxBufferSize;
-      this.flushInterval = config.flushInterval;
-      this.maxConcurrentRequests = config.maxConcurrentRequests;
-      this.fetchImpl = this.captureFetch();
-      if (typeof window !== "undefined") {
-        window.addEventListener("pagehide", this.handlePageHide);
-      }
-      if (typeof document !== "undefined") {
-        document.addEventListener("visibilitychange", this.handleVisibilityChange);
-      }
-    }
-    report(event, priority) {
-      if (this.destroyed) {
-        return;
-      }
-      if (!this.fetchImpl && !this.canUseBeacon()) {
-        if (!this.transportUnavailableReported) {
-          this.transportUnavailableReported = true;
-          this.handleError(new Error("TraceGA reporting requires fetch or sendBeacon"), "report.transport.unavailable");
-        }
-        return;
-      }
-      this.eventQueue.push(deepClone(event));
-      if (priority === "urgent" || this.eventQueue.length >= this.maxBufferSize) {
-        this.flush();
-        return;
-      }
-      this.scheduleFlush(this.flushInterval);
-    }
-    flush() {
-      if (this.destroyed || !this.fetchImpl && !this.canUseBeacon()) {
-        return;
-      }
-      this.clearTimer();
-      this.createBatchJobs();
-      this.pumpJobs();
-    }
-    destroy() {
-      if (this.destroyed) {
-        return;
-      }
-      this.flushWithBeacon();
-      this.destroyed = true;
-      this.clearTimer();
-      if (typeof window !== "undefined") {
-        window.removeEventListener("pagehide", this.handlePageHide);
-      }
-      if (typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", this.handleVisibilityChange);
-      }
-      this.eventQueue = [];
-      this.jobQueue = [];
-    }
-    captureFetch() {
-      if (typeof window !== "undefined" && typeof window.fetch === "function") {
-        return window.fetch.bind(window);
-      }
-      return null;
-    }
-    createBatchJobs() {
-      while (this.eventQueue.length > 0) {
-        this.jobQueue.push({
-          attempts: 0,
-          events: this.eventQueue.splice(0, this.maxBufferSize)
-        });
-      }
-    }
-    pumpJobs() {
-      if (this.destroyed || !this.fetchImpl) {
-        return;
-      }
-      while (this.activeJobs < this.maxConcurrentRequests && this.jobQueue.length > 0) {
-        const job = this.jobQueue.shift();
-        if (!job) {
-          break;
-        }
-        this.activeJobs += 1;
-        void this.sendJob(job).finally(() => {
-          this.activeJobs -= 1;
-          if (this.jobQueue.length > 0) {
-            this.pumpJobs();
-          } else if (this.eventQueue.length > 0) {
-            this.scheduleFlush(this.flushInterval);
-          }
-        });
-      }
-    }
-    async sendJob(job) {
-      try {
-        const response = await this.fetchImpl(this.batchUrl, {
-          body: safeJsonStringify({ events: job.events }),
-          headers: { "content-type": "application/json" },
-          keepalive: true,
-          method: "POST"
-        });
-        if (!response.ok) {
-          throw new Error(`TraceGA report failed with status ${response.status}`);
-        }
-      } catch (error) {
-        if (!this.destroyed && job.attempts < MAX_RETRY_ATTEMPTS) {
-          const attempts = job.attempts + 1;
-          this.jobQueue.push({ ...job, attempts });
-          return;
-        }
-        this.handleError(error, "report.transport");
-      }
-    }
-    scheduleFlush(delay) {
-      if (this.destroyed || this.timer) {
-        return;
-      }
-      this.timer = setTimeout(() => {
-        this.timer = null;
-        this.flush();
-      }, delay);
-    }
-    clearTimer() {
-      if (!this.timer) {
-        return;
-      }
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-    canUseBeacon() {
-      return typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function";
-    }
-    flushWithBeacon() {
-      if (this.destroyed || !this.canUseBeacon()) {
-        this.flush();
-        return;
-      }
-      this.clearTimer();
-      this.createBatchJobs();
-      const unsentJobs = [];
-      this.jobQueue.forEach((job) => {
-        try {
-          const payload = safeJsonStringify({ events: job.events });
-          const body = new Blob([payload], { type: "application/json" });
-          if (!navigator.sendBeacon(this.batchUrl, body)) {
-            unsentJobs.push(job);
-          }
-        } catch (error) {
-          unsentJobs.push(job);
-          this.handleError(error, "report.beacon");
-        }
-      });
-      this.jobQueue = unsentJobs;
-      if (this.jobQueue.length > 0) {
-        this.scheduleFlush(this.flushInterval);
-      }
-    }
-  }
-
-  const DEFAULT_CONFIG$1 = {
-    sampleRate: 1,
-    maxBufferSize: 20,
-    flushInterval: 3e3,
-    maxConcurrentRequests: 3,
-    enableAutoError: false,
-    enableDebug: false,
-    includeUrlQuery: false,
-    includeUrlHash: false
-  };
-  const MAX_BATCH_SIZE = 20;
-  class TraceCore {
-    constructor() {
-      this.config = null;
-      this.commonParams = /* @__PURE__ */ Object.create(null);
-      this.envInfo = null;
-      this.reporter = null;
-      this.managedReporter = null;
-      this.reporterOverridden = false;
-      this.errorPlugin = null;
-      this.behaviorPlugin = null;
-      this.performancePlugin = null;
-    }
-    register(config) {
-      let hooks;
-      try {
-        hooks = this.resolveHooks(config);
-        this.assertConfig(config);
-        const resolvedConfig = Object.freeze({
-          ...DEFAULT_CONFIG$1,
-          projectId: this.resolveProjectId(config),
-          reportUrl: config.reportUrl.trim(),
-          sampleRate: this.resolveSampleRate(config.sampleRate, DEFAULT_CONFIG$1.sampleRate),
-          maxBufferSize: this.resolveBufferSize(config.maxBufferSize, DEFAULT_CONFIG$1.maxBufferSize),
-          flushInterval: this.resolvePositiveInteger(config.flushInterval, DEFAULT_CONFIG$1.flushInterval, "flushInterval"),
-          maxConcurrentRequests: this.resolvePositiveInteger(config.maxConcurrentRequests, DEFAULT_CONFIG$1.maxConcurrentRequests, "maxConcurrentRequests"),
-          enableAutoError: this.resolveBoolean(config.enableAutoError, DEFAULT_CONFIG$1.enableAutoError, "enableAutoError"),
-          enableDebug: this.resolveBoolean(config.enableDebug, DEFAULT_CONFIG$1.enableDebug, "enableDebug"),
-          includeUrlQuery: this.resolveBoolean(config.includeUrlQuery, DEFAULT_CONFIG$1.includeUrlQuery, "includeUrlQuery"),
-          includeUrlHash: this.resolveBoolean(config.includeUrlHash, DEFAULT_CONFIG$1.includeUrlHash, "includeUrlHash"),
-          plugins: this.resolvePluginConfig(config.plugins, "plugins"),
-          errorPlugin: this.resolvePluginConfig(config.errorPlugin, "errorPlugin"),
-          eventPlugin: this.resolvePluginConfig(config.eventPlugin, "eventPlugin"),
-          performancePlugin: this.resolvePluginConfig(config.performancePlugin, "performancePlugin"),
-          hooks: Object.freeze(hooks)
-        });
-        this.disposeBuiltinPlugins();
-        const pendingEvents = this.drainManagedReporter();
-        this.config = resolvedConfig;
-        this.envInfo = collectEnvInfo(this.getEnvCollectionOptions());
-        this.configureManagedReporter(resolvedConfig);
-        if (pendingEvents.length > 0 && this.reporter) {
-          for (const { event, priority } of pendingEvents) {
-            try {
-              this.reporter.report(event, priority);
-            } catch (e) {
-            }
-          }
-        }
-        this.syncBuiltinPlugins(resolvedConfig);
-        const configSnapshot = deepClone(resolvedConfig);
-        this.runHook(() => {
-          var _a, _b;
-          return (_b = (_a = resolvedConfig.hooks).onReady) == null ? void 0 : _b.call(_a, configSnapshot);
-        }, "onReady");
-      } catch (error) {
-        this.handleError(error, "register", hooks);
-      }
-    }
-    // Supports two signatures:
-    // New: trackEvent(eventName, params?, priority?, eventType?)
-    // Old (compat): trackEvent(eventType, eventName, params?)
-    trackEvent(arg1, arg2 = {}, arg3 = "normal", arg4 = "custom") {
-      var _a, _b, _c, _d;
-      try {
-        let eventName;
-        let params;
-        let priority;
-        let eventType;
-        if (typeof arg2 === "string") {
-          eventType = arg1;
-          eventName = arg2;
-          params = typeof arg3 === "object" && arg3 !== null ? arg3 : {};
-          priority = "normal";
-        } else {
-          eventName = arg1;
-          params = arg2;
-          priority = typeof arg3 === "string" ? arg3 : "normal";
-          eventType = arg4;
-        }
-        if (!this.config || !this.envInfo) {
-          return;
-        }
-        const normalizedEventName = eventName == null ? void 0 : eventName.trim();
-        if (!normalizedEventName) {
-          throw new TypeError("eventName must be a non-empty string");
-        }
-        if (!isPlainObject(params)) {
-          throw new TypeError("params must be a plain object");
-        }
-        if (!["urgent", "high", "normal"].includes(priority)) {
-          throw new TypeError("priority must be urgent, high, or normal");
-        }
-        const normalizedEventType = this.resolveEventType(eventType);
-        if (!this.shouldSample()) {
-          return;
-        }
-        const currentEnvInfo = refreshEnvInfo(this.envInfo, this.getEnvCollectionOptions());
-        this.envInfo = currentEnvInfo;
-        const commonParams = this.getCommonParams();
-        const properties = this.buildProperties(commonParams, params, currentEnvInfo);
-        let event = {
-          eventType: normalizedEventType,
-          eventName: normalizedEventName,
-          appId: this.config.projectId,
-          userId: this.readIdentity(commonParams, ["userId", "user_id"]),
-          sessionId: this.readIdentity(commonParams, ["sessionId", "session_id"]),
-          properties,
-          timestamp: Date.now(),
-          url: (_a = this.readEventLocation(params, "pageUrl")) != null ? _a : currentEnvInfo.url,
-          referrer: (_b = this.readEventLocation(params, "previousUrl")) != null ? _b : currentEnvInfo.referrer
-        };
-        const beforeTrackResult = (_d = (_c = this.config.hooks).onBeforeTrack) == null ? void 0 : _d.call(_c, event);
-        if (beforeTrackResult === false) {
-          return;
-        }
-        if (beforeTrackResult) {
-          event = beforeTrackResult;
-        }
-        event = this.normalizeEvent(event);
-        this.report(event, priority);
-        this.runHook(() => {
-          var _a2, _b2, _c2;
-          return (_c2 = (_a2 = this.config) == null ? void 0 : (_b2 = _a2.hooks).onTrack) == null ? void 0 : _c2.call(_b2, event);
-        }, "onTrack");
-      } catch (error) {
-        this.handleError(error, "trackEvent");
-      }
-    }
-    addCommonParams(params) {
-      try {
-        if (!isPlainObject(params)) {
-          throw new TypeError("common params must be a plain object");
-        }
-        const clonedParams = deepClone(params);
-        Object.keys(clonedParams).forEach((key) => {
-          const descriptor = Object.getOwnPropertyDescriptor(clonedParams, key);
-          if (!descriptor || !("value" in descriptor)) {
-            throw new TypeError("common params cannot contain accessor properties");
-          }
-          Object.defineProperty(this.commonParams, key, {
-            configurable: true,
-            enumerable: true,
-            value: descriptor.value,
-            writable: true
-          });
-        });
-      } catch (error) {
-        this.handleError(error, "addCommonParams");
-      }
-    }
-    removeCommonParams(keys) {
-      try {
-        if (!Array.isArray(keys)) {
-          throw new TypeError("keys must be an array");
-        }
-        keys.forEach((key) => {
-          if (typeof key === "string") {
-            delete this.commonParams[key];
-          }
-        });
-      } catch (error) {
-        this.handleError(error, "removeCommonParams");
-      }
-    }
-    getCommonParams() {
-      try {
-        return deepClone(this.commonParams);
-      } catch (error) {
-        this.handleError(error, "getCommonParams");
-        return /* @__PURE__ */ Object.create(null);
-      }
-    }
-    setUser(userId) {
-      try {
-        if (typeof userId !== "string" || !userId.trim()) {
-          throw new TypeError("userId must be a non-empty string");
-        }
-        this.commonParams.userId = userId.trim();
-        delete this.commonParams.user_id;
-      } catch (error) {
-        this.handleError(error, "setUser");
-      }
-    }
-    getEnvInfo() {
-      try {
-        if (!this.envInfo || !this.config) {
-          return null;
-        }
-        this.envInfo = refreshEnvInfo(this.envInfo, this.getEnvCollectionOptions());
-        return deepClone(this.envInfo);
-      } catch (error) {
-        this.handleError(error, "getEnvInfo");
-        return null;
-      }
-    }
-    getConfig() {
-      try {
-        return this.config ? deepClone(this.config) : null;
-      } catch (error) {
-        this.handleError(error, "getConfig");
-        return null;
-      }
-    }
-    setReporter(reporter) {
-      try {
-        if (reporter !== null && typeof reporter.report !== "function") {
-          throw new TypeError("reporter must implement report(event)");
-        }
-        this.disposeManagedReporter();
-        this.reporterOverridden = true;
-        this.reporter = reporter;
-      } catch (error) {
-        this.handleError(error, "setReporter");
-      }
-    }
-    destroy() {
-      try {
-        this.disposeBuiltinPlugins();
-        const reporter = this.reporter;
-        this.reporter = null;
-        this.managedReporter = null;
-        this.disposeReporter(reporter);
-        this.config = null;
-        this.envInfo = null;
-        this.commonParams = /* @__PURE__ */ Object.create(null);
-        this.reporterOverridden = false;
-      } catch (error) {
-        this.handleError(error, "destroy");
-      }
-    }
-    shouldSample() {
-      var _a, _b;
-      const sampleRate = (_b = (_a = this.config) == null ? void 0 : _a.sampleRate) != null ? _b : 0;
-      if (sampleRate <= 0) {
-        return false;
-      }
-      if (sampleRate >= 1) {
-        return true;
-      }
-      return Math.random() < sampleRate;
-    }
-    resolveEventType(eventType) {
-      if (typeof eventType !== "string" || !eventType.trim()) {
-        throw new TypeError("eventType must be a non-empty string");
-      }
-      return eventType.trim();
-    }
-    buildProperties(commonParams, customParams, envInfo) {
-      const properties = /* @__PURE__ */ Object.create(null);
-      const environmentProperties = {
-        uid: envInfo.uid,
-        userAgent: envInfo.userAgent,
-        browser: envInfo.browser,
-        browserVersion: envInfo.browserVersion,
-        os: envInfo.os,
-        osVersion: envInfo.osVersion,
-        screenWidth: envInfo.screenWidth,
-        screenHeight: envInfo.screenHeight,
-        viewportWidth: envInfo.viewportWidth,
-        viewportHeight: envInfo.viewportHeight
-      };
-      this.copyProperties(properties, environmentProperties);
-      this.copyProperties(properties, commonParams, /* @__PURE__ */ new Set(["userId", "user_id", "sessionId", "session_id"]));
-      this.copyProperties(properties, deepClone(customParams));
-      return properties;
-    }
-    copyProperties(target, source, excludedKeys = /* @__PURE__ */ new Set()) {
-      Object.keys(source).forEach((key) => {
-        if (excludedKeys.has(key)) {
-          return;
-        }
-        const descriptor = Object.getOwnPropertyDescriptor(source, key);
-        if (!descriptor || !("value" in descriptor)) {
-          throw new TypeError("event properties cannot contain accessors");
-        }
-        Object.defineProperty(target, key, {
-          configurable: true,
-          enumerable: true,
-          value: descriptor.value,
-          writable: true
-        });
-      });
-    }
-    readIdentity(params, keys) {
-      for (const key of keys) {
-        const descriptor = Object.getOwnPropertyDescriptor(params, key);
-        if (!descriptor || !("value" in descriptor)) {
-          continue;
-        }
-        if (typeof descriptor.value === "string" && descriptor.value.trim()) {
-          return descriptor.value.trim();
-        }
-      }
-      return void 0;
-    }
-    readEventLocation(params, key) {
-      const descriptor = Object.getOwnPropertyDescriptor(params, key);
-      if (descriptor && "value" in descriptor && typeof descriptor.value === "string" && descriptor.value.trim()) {
-        return descriptor.value.trim();
-      }
-      return void 0;
-    }
-    assertEvent(event) {
-      if (!event || typeof event.eventType !== "string" || !event.eventType.trim() || typeof event.eventName !== "string" || !event.eventName.trim() || typeof event.appId !== "string" || !event.appId.trim() || !isPlainObject(event.properties) || typeof event.timestamp !== "number" || !Number.isFinite(event.timestamp) || typeof event.url !== "string" || typeof event.referrer !== "string") {
-        throw new TypeError("track event does not match the backend schema");
-      }
-    }
-    normalizeEvent(event) {
-      this.assertEvent(event);
-      const properties = /* @__PURE__ */ Object.create(null);
-      this.copyProperties(properties, deepClone(event.properties));
-      const normalizedEvent = {
-        eventType: event.eventType.trim(),
-        eventName: event.eventName.trim(),
-        appId: event.appId.trim(),
-        properties,
-        timestamp: event.timestamp,
-        url: event.url,
-        referrer: event.referrer
-      };
-      const userId = this.normalizeOptionalIdentity(event.userId, "userId");
-      const sessionId = this.normalizeOptionalIdentity(event.sessionId, "sessionId");
-      if (userId) {
-        normalizedEvent.userId = userId;
-      }
-      if (sessionId) {
-        normalizedEvent.sessionId = sessionId;
-      }
-      return normalizedEvent;
-    }
-    normalizeOptionalIdentity(value, fieldName) {
-      if (value === void 0) {
-        return void 0;
-      }
-      if (typeof value !== "string" || !value.trim()) {
-        throw new TypeError(`${fieldName} must be a non-empty string`);
-      }
-      return value.trim();
-    }
-    report(event, priority) {
-      var _a;
-      try {
-        const reportResult = (_a = this.reporter) == null ? void 0 : _a.report(event, priority);
-        if (reportResult) {
-          void Promise.resolve(reportResult).catch((error) => {
-            this.handleError(error, "report");
-          });
-        }
-      } catch (error) {
-        this.handleError(error, "report");
-      }
-    }
-    assertConfig(config) {
-      if (!config || typeof config !== "object") {
-        throw new TypeError("config is required");
-      }
-      const projectId = (config.projectId || config.appId || "").trim();
-      if (!projectId) {
-        throw new TypeError("projectId or appId must be a non-empty string");
-      }
-      if (typeof config.reportUrl !== "string" || !config.reportUrl.trim()) {
-        throw new TypeError("reportUrl must be a non-empty string");
-      }
-      const parsedUrl = new URL(config.reportUrl, "http://tracega.local");
-      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-        throw new TypeError("reportUrl must use http or https");
-      }
-      if (config.projectId && config.appId && config.projectId !== config.appId && config.enableDebug) {
-        console.warn("[TraceGA] Both projectId and appId provided; projectId takes precedence.");
-      }
-    }
-    resolveProjectId(config) {
-      return (config.projectId || config.appId || "").trim();
-    }
-    resolveHooks(config) {
-      if (!config || typeof config !== "object") {
-        return {};
-      }
-      const rawHooks = config.hooks;
-      if (rawHooks === void 0 || rawHooks === null) {
-        return {};
-      }
-      if (!isPlainObject(rawHooks)) {
-        throw new TypeError("hooks must be a plain object");
-      }
-      const { onReady, onBeforeTrack, onTrack, onError } = rawHooks;
-      const hookEntries = [onReady, onBeforeTrack, onTrack, onError];
-      if (hookEntries.some((hook) => hook !== void 0 && typeof hook !== "function")) {
-        throw new TypeError("hooks must be functions");
-      }
-      return { onReady, onBeforeTrack, onTrack, onError };
-    }
-    resolveSampleRate(value, fallback) {
-      if (value === void 0) {
-        return fallback;
-      }
-      if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
-        throw new RangeError("sampleRate must be between 0 and 1");
-      }
-      return value;
-    }
-    resolveBufferSize(value, fallback) {
-      const resolved = this.resolvePositiveInteger(value, fallback, "maxBufferSize");
-      if (resolved > MAX_BATCH_SIZE) {
-        throw new RangeError(`maxBufferSize cannot exceed ${MAX_BATCH_SIZE}`);
-      }
-      return resolved;
-    }
-    resolvePositiveInteger(value, fallback, fieldName) {
-      if (value === void 0) {
-        return fallback;
-      }
-      if (!Number.isInteger(value) || value <= 0) {
-        throw new RangeError(`${fieldName} must be a positive integer`);
-      }
-      return value;
-    }
-    resolveBoolean(value, fallback, fieldName) {
-      if (value === void 0) {
-        return fallback;
-      }
-      if (typeof value !== "boolean") {
-        throw new TypeError(`${fieldName} must be a boolean`);
-      }
-      return value;
-    }
-    resolvePluginConfig(value, fieldName) {
-      if (value === void 0) {
-        return Object.freeze({});
-      }
-      if (!isPlainObject(value)) {
-        throw new TypeError(`${fieldName} must be a plain object`);
-      }
-      if (Object.values(value).some((option) => typeof option !== "boolean")) {
-        throw new TypeError(`${fieldName} options must be booleans`);
-      }
-      return Object.freeze({ ...value });
-    }
-    getEnvCollectionOptions() {
-      var _a, _b, _c, _d;
-      return {
-        includeQuery: (_b = (_a = this.config) == null ? void 0 : _a.includeUrlQuery) != null ? _b : false,
-        includeHash: (_d = (_c = this.config) == null ? void 0 : _c.includeUrlHash) != null ? _d : false
-      };
-    }
-    configureManagedReporter(config) {
-      if (this.reporterOverridden || typeof window === "undefined") {
-        return;
-      }
-      const reporter = new DefaultReporter(config, (error, context) => {
-        this.handleError(error, context);
-      });
-      this.managedReporter = reporter;
-      this.reporter = reporter;
-    }
-    drainManagedReporter() {
-      if (!this.managedReporter) {
-        return [];
-      }
-      try {
-        const drained = this.managedReporter.drainEvents();
-        const reporter = this.managedReporter;
-        this.managedReporter = null;
-        if (this.reporter === reporter) {
-          this.reporter = null;
-        }
-        return drained;
-      } catch (e) {
-        this.disposeManagedReporter();
-        return [];
-      }
-    }
-    disposeManagedReporter() {
-      if (!this.managedReporter) {
-        return;
-      }
-      const reporter = this.managedReporter;
-      this.managedReporter = null;
-      if (this.reporter === reporter) {
-        this.reporter = null;
-      }
-      this.disposeReporter(reporter);
-    }
-    disposeReporter(reporter) {
-      var _a;
-      try {
-        const result = (_a = reporter == null ? void 0 : reporter.destroy) == null ? void 0 : _a.call(reporter);
-        if (result) {
-          void Promise.resolve(result).catch((error) => {
-            this.handleError(error, "reporter.destroy");
-          });
-        }
-      } catch (error) {
-        this.handleError(error, "reporter.destroy");
-      }
-    }
-    syncBuiltinPlugins(config) {
-      if (config.enableAutoError || config.plugins.error) {
-        this.errorPlugin = new ErrorPlugin({
-          ...config.errorPlugin,
-          reportUrl: config.reportUrl,
-          onError: (error, context) => this.handleError(error, context)
-        });
-        this.errorPlugin.install(this);
-      }
-      if (config.plugins.event) {
-        this.behaviorPlugin = new BehaviorPlugin({
-          click: config.eventPlugin.click === false ? false : void 0,
-          pageView: config.eventPlugin.route === false ? false : void 0,
-          exposure: config.eventPlugin.exposure === false ? false : void 0,
-          onError: (error, context) => this.handleError(error, context)
-        });
-        this.behaviorPlugin.install(this);
-      }
-      if (config.plugins.performance) {
-        this.performancePlugin = new PerformancePlugin(config.performancePlugin);
-        this.performancePlugin.install(this);
-      }
-    }
-    disposeBuiltinPlugins() {
-      var _a, _b, _c;
-      (_a = this.performancePlugin) == null ? void 0 : _a.uninstall();
-      this.performancePlugin = null;
-      (_b = this.behaviorPlugin) == null ? void 0 : _b.uninstall();
-      this.behaviorPlugin = null;
-      (_c = this.errorPlugin) == null ? void 0 : _c.uninstall();
-      this.errorPlugin = null;
-    }
-    runHook(callback, context) {
-      try {
-        callback();
-      } catch (error) {
-        this.handleError(error, context);
-      }
-    }
-    handleError(error, context, hooks) {
-      var _a, _b, _c;
-      try {
-        (_c = (_b = hooks != null ? hooks : (_a = this.config) == null ? void 0 : _a.hooks) == null ? void 0 : _b.onError) == null ? void 0 : _c.call(_b, error, context);
-      } catch (e) {
-      }
-    }
-  }
-  const traceCore = new TraceCore();
-
-  const EXCLUDED_TAGS = /* @__PURE__ */ new Set([
-    "SCRIPT",
-    "STYLE",
-    "LINK",
-    "META",
-    "NOSCRIPT",
-    "BR",
-    "HR"
-  ]);
+  const EXCLUDED_TAGS = /* @__PURE__ */ new Set(["SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "BR", "HR"]);
   const PIXEL_SAMPLE_HEIGHT = 100;
   const PIXEL_SAMPLE_MAX_WIDTH = 800;
   const DEFAULT_DETECT_ROUNDS = Object.freeze([3e3, 6e3, 1e4]);
-  const DEFAULT_CONFIG = {
+  const DEFAULT_CONFIG$1 = {
     threshold: 2,
     sampleRate: 1,
     loadDetectDelay: 1e3,
@@ -3423,7 +2729,7 @@
       this.onLoad = null;
       this.domReadyFired = false;
       this.loadFired = false;
-      this.config = { ...DEFAULT_CONFIG, ...config };
+      this.config = { ...DEFAULT_CONFIG$1, ...config };
     }
     // ─── 公开 API ───
     /** 安装插件，注册事件监听并启动白屏检测。 */
@@ -3628,6 +2934,844 @@
     }
   }
 
+  const MAX_RETRY_ATTEMPTS = 2;
+  function getBatchUrl(reportUrl) {
+    var _a;
+    const baseUrl = typeof window !== "undefined" && ((_a = window.location) == null ? void 0 : _a.href) ? window.location.href : "http://tracega.local/";
+    const parsedUrl = new URL(reportUrl, baseUrl);
+    if (!parsedUrl.pathname.endsWith("/batch")) {
+      parsedUrl.pathname = `${parsedUrl.pathname.replace(/\/$/, "")}/batch`;
+    }
+    parsedUrl.hash = "";
+    return parsedUrl.href;
+  }
+  class DefaultReporter {
+    constructor(config, handleError) {
+      this.handleError = handleError;
+      this.eventQueue = [];
+      this.jobQueue = [];
+      this.activeJobs = 0;
+      this.timer = null;
+      this.destroyed = false;
+      this.transportUnavailableReported = false;
+      this.handlePageHide = () => {
+        this.flushWithBeacon();
+      };
+      this.handleVisibilityChange = () => {
+        if (document.visibilityState === "hidden") {
+          this.flushWithBeacon();
+        }
+      };
+      this.batchUrl = getBatchUrl(config.reportUrl);
+      this.maxBufferSize = config.maxBufferSize;
+      this.flushInterval = config.flushInterval;
+      this.maxConcurrentRequests = config.maxConcurrentRequests;
+      this.fetchImpl = this.captureFetch();
+      if (typeof window !== "undefined") {
+        window.addEventListener("pagehide", this.handlePageHide);
+      }
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", this.handleVisibilityChange);
+      }
+    }
+    report(event, priority) {
+      if (this.destroyed) {
+        return;
+      }
+      if (!this.fetchImpl && !this.canUseBeacon()) {
+        if (!this.transportUnavailableReported) {
+          this.transportUnavailableReported = true;
+          this.handleError(new Error("TraceGA reporting requires fetch or sendBeacon"), "report.transport.unavailable");
+        }
+        return;
+      }
+      this.eventQueue.push(deepClone(event));
+      if (priority === "urgent" || this.eventQueue.length >= this.maxBufferSize) {
+        this.flush();
+        return;
+      }
+      this.scheduleFlush(this.flushInterval);
+    }
+    flush() {
+      if (this.destroyed || !this.fetchImpl && !this.canUseBeacon()) {
+        return;
+      }
+      this.clearTimer();
+      this.createBatchJobs();
+      this.pumpJobs();
+    }
+    /** 清空队列、销毁 reporter，返回未发送的事件列表 */
+    drainEvents() {
+      this.clearTimer();
+      const drained = [];
+      while (this.eventQueue.length > 0) {
+        const event = this.eventQueue.shift();
+        drained.push({ event, priority: "normal" });
+      }
+      while (this.jobQueue.length > 0) {
+        const job = this.jobQueue.shift();
+        job.events.forEach((event) => {
+          drained.push({ event, priority: "normal" });
+        });
+      }
+      this.destroyed = true;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("pagehide", this.handlePageHide);
+      }
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+      }
+      return drained;
+    }
+    destroy() {
+      if (this.destroyed) {
+        return;
+      }
+      this.flushWithBeacon();
+      this.destroyed = true;
+      this.clearTimer();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("pagehide", this.handlePageHide);
+      }
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+      }
+      this.eventQueue = [];
+      this.jobQueue = [];
+    }
+    captureFetch() {
+      if (typeof window !== "undefined" && typeof window.fetch === "function") {
+        return window.fetch.bind(window);
+      }
+      return null;
+    }
+    createBatchJobs() {
+      while (this.eventQueue.length > 0) {
+        this.jobQueue.push({
+          attempts: 0,
+          events: this.eventQueue.splice(0, this.maxBufferSize)
+        });
+      }
+    }
+    pumpJobs() {
+      if (this.destroyed) {
+        return;
+      }
+      if (!this.fetchImpl) {
+        if (this.canUseBeacon()) {
+          this.sendJobsWithBeacon();
+        }
+        return;
+      }
+      while (this.activeJobs < this.maxConcurrentRequests && this.jobQueue.length > 0) {
+        const job = this.jobQueue.shift();
+        if (!job) {
+          break;
+        }
+        this.activeJobs += 1;
+        void this.sendJob(job).finally(() => {
+          this.activeJobs -= 1;
+          if (this.jobQueue.length > 0) {
+            this.pumpJobs();
+          } else if (this.eventQueue.length > 0) {
+            this.scheduleFlush(this.flushInterval);
+          }
+        });
+      }
+    }
+    async sendJob(job) {
+      try {
+        const response = await this.fetchImpl(this.batchUrl, {
+          body: safeJsonStringify({ events: job.events }),
+          headers: { "content-type": "application/json" },
+          keepalive: true,
+          method: "POST"
+        });
+        if (!response.ok) {
+          throw new Error(`TraceGA report failed with status ${response.status}`);
+        }
+        try {
+          const body = await response.clone().json();
+          if (body && typeof body === "object" && body.failedCount > 0) {
+            const reasons = Array.isArray(body.failures) ? body.failures.map((f) => {
+              var _a, _b;
+              return `${(_a = f.index) != null ? _a : "?"}:${(_b = f.reason) != null ? _b : "unknown"}`;
+            }).join("; ") : `failedCount=${body.failedCount}`;
+            this.handleError(new Error(`TraceGA batch partial failure: ${reasons}`), "report.transport");
+          }
+        } catch (e) {
+        }
+      } catch (error) {
+        if (!this.destroyed && job.attempts < MAX_RETRY_ATTEMPTS) {
+          const attempts = job.attempts + 1;
+          this.jobQueue.push({ ...job, attempts });
+          return;
+        }
+        this.handleError(error, "report.transport");
+      }
+    }
+    scheduleFlush(delay) {
+      if (this.destroyed || this.timer) {
+        return;
+      }
+      this.timer = setTimeout(() => {
+        this.timer = null;
+        this.flush();
+      }, delay);
+    }
+    clearTimer() {
+      if (!this.timer) {
+        return;
+      }
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    canUseBeacon() {
+      return typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function";
+    }
+    flushWithBeacon() {
+      if (this.destroyed)
+        return;
+      this.clearTimer();
+      this.createBatchJobs();
+      if (!this.canUseBeacon()) {
+        this.sendJobsWithFetch();
+        return;
+      }
+      const unsentJobs = [];
+      this.jobQueue.forEach((job) => {
+        try {
+          const payload = safeJsonStringify({ events: job.events });
+          const body = new Blob([payload], { type: "application/json" });
+          if (!navigator.sendBeacon(this.batchUrl, body)) {
+            unsentJobs.push(job);
+          }
+        } catch (error) {
+          unsentJobs.push(job);
+          this.handleError(error, "report.beacon");
+        }
+      });
+      this.jobQueue = unsentJobs;
+      if (this.jobQueue.length > 0) {
+        this.scheduleFlush(this.flushInterval);
+      }
+    }
+    /** 降级方案：使用 sendBeacon 发送所有 job（pumpJobs 中 fetch 不可用时的兜底） */
+    sendJobsWithBeacon() {
+      const unsentJobs = [];
+      this.jobQueue.forEach((job) => {
+        try {
+          const payload = safeJsonStringify({ events: job.events });
+          const body = new Blob([payload], { type: "application/json" });
+          if (!navigator.sendBeacon(this.batchUrl, body)) {
+            unsentJobs.push(job);
+          }
+        } catch (error) {
+          unsentJobs.push(job);
+          this.handleError(error, "report.beacon");
+        }
+      });
+      this.jobQueue = unsentJobs;
+      if (this.jobQueue.length > 0) {
+        this.scheduleFlush(this.flushInterval);
+      }
+    }
+    /** 降级方案：使用 fetch + keepalive 发送所有 job */
+    sendJobsWithFetch() {
+      if (!this.fetchImpl) {
+        this.handleError(new Error("TraceGA: no transport available (fetch + beacon both missing)"), "report.transport.unavailable");
+        return;
+      }
+      this.jobQueue.forEach((job) => {
+        try {
+          this.fetchImpl(this.batchUrl, {
+            body: safeJsonStringify({ events: job.events }),
+            headers: { "content-type": "application/json" },
+            keepalive: true,
+            method: "POST"
+          }).catch((error) => {
+            this.handleError(error, "report.beacon.fallback");
+          });
+        } catch (error) {
+          this.handleError(error, "report.beacon.fallback");
+        }
+      });
+      this.jobQueue = [];
+    }
+  }
+
+  const DEFAULT_CONFIG = {
+    sampleRate: 1,
+    maxBufferSize: 20,
+    flushInterval: 3e3,
+    maxConcurrentRequests: 3,
+    enableAutoError: false,
+    enableDebug: false,
+    includeUrlQuery: false,
+    includeUrlHash: false
+  };
+  const MAX_BATCH_SIZE = 20;
+  class TraceCore {
+    constructor() {
+      this.config = null;
+      this.commonParams = /* @__PURE__ */ Object.create(null);
+      this.envInfo = null;
+      this.reporter = null;
+      this.managedReporter = null;
+      this.reporterOverridden = false;
+      this.errorPlugin = null;
+      this.behaviorPlugin = null;
+      this.performancePlugin = null;
+      this.whiteScreenPlugin = null;
+    }
+    register(config) {
+      let hooks;
+      try {
+        hooks = this.resolveHooks(config);
+        this.assertConfig(config);
+        const resolvedConfig = Object.freeze({
+          ...DEFAULT_CONFIG,
+          appId: this.resolveAppId(config),
+          reportUrl: config.reportUrl.trim(),
+          sampleRate: this.resolveSampleRate(config.sampleRate, DEFAULT_CONFIG.sampleRate),
+          maxBufferSize: this.resolveBufferSize(config.maxBufferSize, DEFAULT_CONFIG.maxBufferSize),
+          flushInterval: this.resolvePositiveInteger(config.flushInterval, DEFAULT_CONFIG.flushInterval, "flushInterval"),
+          maxConcurrentRequests: this.resolvePositiveInteger(config.maxConcurrentRequests, DEFAULT_CONFIG.maxConcurrentRequests, "maxConcurrentRequests"),
+          enableAutoError: this.resolveBoolean(config.enableAutoError, DEFAULT_CONFIG.enableAutoError, "enableAutoError"),
+          enableDebug: this.resolveBoolean(config.enableDebug, DEFAULT_CONFIG.enableDebug, "enableDebug"),
+          includeUrlQuery: this.resolveBoolean(config.includeUrlQuery, DEFAULT_CONFIG.includeUrlQuery, "includeUrlQuery"),
+          includeUrlHash: this.resolveBoolean(config.includeUrlHash, DEFAULT_CONFIG.includeUrlHash, "includeUrlHash"),
+          plugins: this.resolvePluginConfig(config.plugins, "plugins"),
+          errorPlugin: this.resolvePluginConfig(config.errorPlugin, "errorPlugin"),
+          eventPlugin: this.resolvePluginConfig(config.eventPlugin, "eventPlugin"),
+          performancePlugin: this.resolvePluginConfig(config.performancePlugin, "performancePlugin"),
+          whiteScreenPlugin: this.resolvePluginConfig(config.whiteScreenPlugin, "whiteScreenPlugin"),
+          hooks: Object.freeze(hooks)
+        });
+        this.disposeBuiltinPlugins();
+        const pendingEvents = this.drainManagedReporter();
+        this.config = resolvedConfig;
+        this.envInfo = collectEnvInfo(this.getEnvCollectionOptions());
+        this.configureManagedReporter(resolvedConfig);
+        if (pendingEvents.length > 0 && this.reporter) {
+          for (const { event, priority } of pendingEvents) {
+            try {
+              this.reporter.report(event, priority);
+            } catch (e) {
+            }
+          }
+        }
+        this.syncBuiltinPlugins(resolvedConfig);
+        const configSnapshot = deepClone(resolvedConfig);
+        this.runHook(() => {
+          var _a, _b;
+          return (_b = (_a = resolvedConfig.hooks).onReady) == null ? void 0 : _b.call(_a, configSnapshot);
+        }, "onReady");
+      } catch (error) {
+        this.handleError(error, "register", hooks);
+      }
+    }
+    // Supports two signatures:
+    // New: trackEvent(eventName, params?, priority?, eventType?)
+    // Old (compat): trackEvent(eventType, eventName, params?)
+    trackEvent(arg1, arg2 = {}, arg3 = "normal", arg4 = "custom") {
+      var _a, _b, _c, _d;
+      try {
+        let eventName;
+        let params;
+        let priority;
+        let eventType;
+        if (typeof arg2 === "string") {
+          eventType = arg1;
+          eventName = arg2;
+          params = typeof arg3 === "object" && arg3 !== null ? arg3 : {};
+          priority = "normal";
+        } else {
+          eventName = arg1;
+          params = arg2;
+          priority = typeof arg3 === "string" ? arg3 : "normal";
+          eventType = arg4;
+        }
+        if (!this.config || !this.envInfo) {
+          return;
+        }
+        const normalizedEventName = eventName == null ? void 0 : eventName.trim();
+        if (!normalizedEventName) {
+          throw new TypeError("eventName must be a non-empty string");
+        }
+        if (!isPlainObject(params)) {
+          throw new TypeError("params must be a plain object");
+        }
+        if (!["urgent", "high", "normal"].includes(priority)) {
+          throw new TypeError("priority must be urgent, high, or normal");
+        }
+        const normalizedEventType = this.resolveEventType(eventType);
+        if (!this.shouldSample()) {
+          return;
+        }
+        const currentEnvInfo = refreshEnvInfo(this.envInfo, this.getEnvCollectionOptions());
+        this.envInfo = currentEnvInfo;
+        const commonParams = this.getCommonParams();
+        const properties = this.buildProperties(commonParams, params, currentEnvInfo);
+        let event = {
+          eventType: normalizedEventType,
+          eventName: normalizedEventName,
+          appId: this.config.appId,
+          userId: this.readIdentity(commonParams, ["userId", "user_id"]),
+          sessionId: this.readIdentity(commonParams, ["sessionId", "session_id"]),
+          properties,
+          timestamp: Date.now(),
+          url: (_a = this.readEventLocation(params, "pageUrl")) != null ? _a : currentEnvInfo.url,
+          referrer: (_b = this.readEventLocation(params, "previousUrl")) != null ? _b : currentEnvInfo.referrer
+        };
+        const beforeTrackResult = (_d = (_c = this.config.hooks).onBeforeTrack) == null ? void 0 : _d.call(_c, event);
+        if (beforeTrackResult === false) {
+          return;
+        }
+        if (beforeTrackResult) {
+          event = beforeTrackResult;
+        }
+        event = this.normalizeEvent(event);
+        this.report(event, priority);
+        this.runHook(() => {
+          var _a2, _b2, _c2;
+          return (_c2 = (_a2 = this.config) == null ? void 0 : (_b2 = _a2.hooks).onTrack) == null ? void 0 : _c2.call(_b2, event);
+        }, "onTrack");
+      } catch (error) {
+        this.handleError(error, "trackEvent");
+      }
+    }
+    addCommonParams(params) {
+      try {
+        if (!isPlainObject(params)) {
+          throw new TypeError("common params must be a plain object");
+        }
+        const clonedParams = deepClone(params);
+        Object.keys(clonedParams).forEach((key) => {
+          const descriptor = Object.getOwnPropertyDescriptor(clonedParams, key);
+          if (!descriptor || !("value" in descriptor)) {
+            throw new TypeError("common params cannot contain accessor properties");
+          }
+          Object.defineProperty(this.commonParams, key, {
+            configurable: true,
+            enumerable: true,
+            value: descriptor.value,
+            writable: true
+          });
+        });
+      } catch (error) {
+        this.handleError(error, "addCommonParams");
+      }
+    }
+    removeCommonParams(keys) {
+      try {
+        if (!Array.isArray(keys)) {
+          throw new TypeError("keys must be an array");
+        }
+        keys.forEach((key) => {
+          if (typeof key === "string") {
+            delete this.commonParams[key];
+          }
+        });
+      } catch (error) {
+        this.handleError(error, "removeCommonParams");
+      }
+    }
+    getCommonParams() {
+      try {
+        return deepClone(this.commonParams);
+      } catch (error) {
+        this.handleError(error, "getCommonParams");
+        return /* @__PURE__ */ Object.create(null);
+      }
+    }
+    setUser(userId) {
+      try {
+        if (typeof userId !== "string" || !userId.trim()) {
+          throw new TypeError("userId must be a non-empty string");
+        }
+        this.commonParams.userId = userId.trim();
+        delete this.commonParams.user_id;
+      } catch (error) {
+        this.handleError(error, "setUser");
+      }
+    }
+    getEnvInfo() {
+      try {
+        if (!this.envInfo || !this.config) {
+          return null;
+        }
+        this.envInfo = refreshEnvInfo(this.envInfo, this.getEnvCollectionOptions());
+        return deepClone(this.envInfo);
+      } catch (error) {
+        this.handleError(error, "getEnvInfo");
+        return null;
+      }
+    }
+    getConfig() {
+      try {
+        return this.config ? deepClone(this.config) : null;
+      } catch (error) {
+        this.handleError(error, "getConfig");
+        return null;
+      }
+    }
+    setReporter(reporter) {
+      try {
+        if (reporter !== null && typeof reporter.report !== "function") {
+          throw new TypeError("reporter must implement report(event)");
+        }
+        this.disposeManagedReporter();
+        this.reporterOverridden = true;
+        this.reporter = reporter;
+      } catch (error) {
+        this.handleError(error, "setReporter");
+      }
+    }
+    flush() {
+      var _a, _b;
+      try {
+        (_b = (_a = this.reporter) == null ? void 0 : _a.flush) == null ? void 0 : _b.call(_a);
+      } catch (error) {
+        this.handleError(error, "flush");
+      }
+    }
+    destroy() {
+      try {
+        this.disposeBuiltinPlugins();
+        const reporter = this.reporter;
+        this.reporter = null;
+        this.managedReporter = null;
+        this.disposeReporter(reporter);
+        this.config = null;
+        this.envInfo = null;
+        this.commonParams = /* @__PURE__ */ Object.create(null);
+        this.reporterOverridden = false;
+      } catch (error) {
+        this.handleError(error, "destroy");
+      }
+    }
+    shouldSample() {
+      var _a, _b;
+      const sampleRate = (_b = (_a = this.config) == null ? void 0 : _a.sampleRate) != null ? _b : 0;
+      if (sampleRate <= 0) {
+        return false;
+      }
+      if (sampleRate >= 1) {
+        return true;
+      }
+      return Math.random() < sampleRate;
+    }
+    resolveEventType(eventType) {
+      if (typeof eventType !== "string" || !eventType.trim()) {
+        throw new TypeError("eventType must be a non-empty string");
+      }
+      return eventType.trim();
+    }
+    buildProperties(commonParams, customParams, envInfo) {
+      const properties = /* @__PURE__ */ Object.create(null);
+      const environmentProperties = {
+        uid: envInfo.uid,
+        userAgent: envInfo.userAgent,
+        browser: envInfo.browser,
+        browserVersion: envInfo.browserVersion,
+        os: envInfo.os,
+        osVersion: envInfo.osVersion,
+        screenWidth: envInfo.screenWidth,
+        screenHeight: envInfo.screenHeight,
+        viewportWidth: envInfo.viewportWidth,
+        viewportHeight: envInfo.viewportHeight
+      };
+      this.copyProperties(properties, environmentProperties);
+      this.copyProperties(properties, commonParams, /* @__PURE__ */ new Set(["userId", "user_id", "sessionId", "session_id"]));
+      this.copyProperties(properties, deepClone(customParams));
+      return properties;
+    }
+    copyProperties(target, source, excludedKeys = /* @__PURE__ */ new Set()) {
+      Object.keys(source).forEach((key) => {
+        if (excludedKeys.has(key)) {
+          return;
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(source, key);
+        if (!descriptor || !("value" in descriptor)) {
+          throw new TypeError("event properties cannot contain accessors");
+        }
+        Object.defineProperty(target, key, {
+          configurable: true,
+          enumerable: true,
+          value: descriptor.value,
+          writable: true
+        });
+      });
+    }
+    readIdentity(params, keys) {
+      for (const key of keys) {
+        const descriptor = Object.getOwnPropertyDescriptor(params, key);
+        if (!descriptor || !("value" in descriptor)) {
+          continue;
+        }
+        if (typeof descriptor.value === "string" && descriptor.value.trim()) {
+          return descriptor.value.trim();
+        }
+      }
+      return void 0;
+    }
+    readEventLocation(params, key) {
+      const descriptor = Object.getOwnPropertyDescriptor(params, key);
+      if (descriptor && "value" in descriptor && typeof descriptor.value === "string" && descriptor.value.trim()) {
+        return descriptor.value.trim();
+      }
+      return void 0;
+    }
+    assertEvent(event) {
+      if (!event || typeof event.eventType !== "string" || !event.eventType.trim() || typeof event.eventName !== "string" || !event.eventName.trim() || typeof event.appId !== "string" || !event.appId.trim() || !isPlainObject(event.properties) || typeof event.timestamp !== "number" || !Number.isFinite(event.timestamp) || typeof event.url !== "string" || typeof event.referrer !== "string") {
+        throw new TypeError("track event does not match the backend schema");
+      }
+    }
+    normalizeEvent(event) {
+      this.assertEvent(event);
+      const properties = /* @__PURE__ */ Object.create(null);
+      this.copyProperties(properties, deepClone(event.properties));
+      const normalizedEvent = {
+        eventType: event.eventType.trim(),
+        eventName: event.eventName.trim(),
+        appId: event.appId.trim(),
+        properties,
+        timestamp: event.timestamp,
+        url: event.url,
+        referrer: event.referrer
+      };
+      const userId = this.normalizeOptionalIdentity(event.userId, "userId");
+      const sessionId = this.normalizeOptionalIdentity(event.sessionId, "sessionId");
+      if (userId) {
+        normalizedEvent.userId = userId;
+      }
+      if (sessionId) {
+        normalizedEvent.sessionId = sessionId;
+      }
+      return normalizedEvent;
+    }
+    normalizeOptionalIdentity(value, fieldName) {
+      if (value === void 0) {
+        return void 0;
+      }
+      if (typeof value !== "string" || !value.trim()) {
+        throw new TypeError(`${fieldName} must be a non-empty string`);
+      }
+      return value.trim();
+    }
+    report(event, priority) {
+      var _a;
+      try {
+        const reportResult = (_a = this.reporter) == null ? void 0 : _a.report(event, priority);
+        if (reportResult) {
+          void Promise.resolve(reportResult).catch((error) => {
+            this.handleError(error, "report");
+          });
+        }
+      } catch (error) {
+        this.handleError(error, "report");
+      }
+    }
+    assertConfig(config) {
+      if (!config || typeof config !== "object") {
+        throw new TypeError("config is required");
+      }
+      const appId = (config.appId || config.projectId || "").trim();
+      if (!appId) {
+        throw new TypeError("appId must be a non-empty string");
+      }
+      if (typeof config.reportUrl !== "string" || !config.reportUrl.trim()) {
+        throw new TypeError("reportUrl must be a non-empty string");
+      }
+      const parsedUrl = new URL(config.reportUrl, "http://tracega.local");
+      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        throw new TypeError("reportUrl must use http or https");
+      }
+      if (config.appId && config.projectId && config.appId !== config.projectId && config.enableDebug) {
+        console.warn("[TraceGA] Both appId and projectId provided; appId takes precedence.");
+      }
+    }
+    resolveAppId(config) {
+      return (config.appId || config.projectId || "").trim();
+    }
+    resolveHooks(config) {
+      if (!config || typeof config !== "object") {
+        return {};
+      }
+      const rawHooks = config.hooks;
+      if (rawHooks === void 0 || rawHooks === null) {
+        return {};
+      }
+      if (!isPlainObject(rawHooks)) {
+        throw new TypeError("hooks must be a plain object");
+      }
+      const { onReady, onBeforeTrack, onTrack, onError } = rawHooks;
+      const hookEntries = [onReady, onBeforeTrack, onTrack, onError];
+      if (hookEntries.some((hook) => hook !== void 0 && typeof hook !== "function")) {
+        throw new TypeError("hooks must be functions");
+      }
+      return { onReady, onBeforeTrack, onTrack, onError };
+    }
+    resolveSampleRate(value, fallback) {
+      if (value === void 0) {
+        return fallback;
+      }
+      if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+        throw new RangeError("sampleRate must be between 0 and 1");
+      }
+      return value;
+    }
+    resolveBufferSize(value, fallback) {
+      const resolved = this.resolvePositiveInteger(value, fallback, "maxBufferSize");
+      if (resolved > MAX_BATCH_SIZE) {
+        throw new RangeError(`maxBufferSize cannot exceed ${MAX_BATCH_SIZE}`);
+      }
+      return resolved;
+    }
+    resolvePositiveInteger(value, fallback, fieldName) {
+      if (value === void 0) {
+        return fallback;
+      }
+      if (!Number.isInteger(value) || value <= 0) {
+        throw new RangeError(`${fieldName} must be a positive integer`);
+      }
+      return value;
+    }
+    resolveBoolean(value, fallback, fieldName) {
+      if (value === void 0) {
+        return fallback;
+      }
+      if (typeof value !== "boolean") {
+        throw new TypeError(`${fieldName} must be a boolean`);
+      }
+      return value;
+    }
+    resolvePluginConfig(value, fieldName) {
+      if (value === void 0) {
+        return Object.freeze({});
+      }
+      if (!isPlainObject(value)) {
+        throw new TypeError(`${fieldName} must be a plain object`);
+      }
+      if (Object.values(value).some((option) => typeof option !== "boolean")) {
+        throw new TypeError(`${fieldName} options must be booleans`);
+      }
+      return Object.freeze({ ...value });
+    }
+    getEnvCollectionOptions() {
+      var _a, _b, _c, _d;
+      return {
+        includeQuery: (_b = (_a = this.config) == null ? void 0 : _a.includeUrlQuery) != null ? _b : false,
+        includeHash: (_d = (_c = this.config) == null ? void 0 : _c.includeUrlHash) != null ? _d : false
+      };
+    }
+    configureManagedReporter(config) {
+      if (this.reporterOverridden || typeof window === "undefined") {
+        return;
+      }
+      const reporter = new DefaultReporter(config, (error, context) => {
+        this.handleError(error, context);
+      });
+      this.managedReporter = reporter;
+      this.reporter = reporter;
+    }
+    drainManagedReporter() {
+      if (!this.managedReporter) {
+        return [];
+      }
+      try {
+        const drained = this.managedReporter.drainEvents();
+        const reporter = this.managedReporter;
+        this.managedReporter = null;
+        if (this.reporter === reporter) {
+          this.reporter = null;
+        }
+        return drained;
+      } catch (e) {
+        this.disposeManagedReporter();
+        return [];
+      }
+    }
+    disposeManagedReporter() {
+      if (!this.managedReporter) {
+        return;
+      }
+      const reporter = this.managedReporter;
+      this.managedReporter = null;
+      if (this.reporter === reporter) {
+        this.reporter = null;
+      }
+      this.disposeReporter(reporter);
+    }
+    disposeReporter(reporter) {
+      var _a;
+      try {
+        const result = (_a = reporter == null ? void 0 : reporter.destroy) == null ? void 0 : _a.call(reporter);
+        if (result) {
+          void Promise.resolve(result).catch((error) => {
+            this.handleError(error, "reporter.destroy");
+          });
+        }
+      } catch (error) {
+        this.handleError(error, "reporter.destroy");
+      }
+    }
+    syncBuiltinPlugins(config) {
+      if (config.enableAutoError || config.plugins.error) {
+        this.errorPlugin = new ErrorPlugin({
+          ...config.errorPlugin,
+          reportUrl: config.reportUrl,
+          onError: (error, context) => this.handleError(error, context)
+        });
+        this.errorPlugin.install(this);
+      }
+      if (config.plugins.event) {
+        this.behaviorPlugin = new BehaviorPlugin({
+          click: config.eventPlugin.click === false ? false : void 0,
+          pageView: config.eventPlugin.route === false ? false : void 0,
+          exposure: config.eventPlugin.exposure === false ? false : void 0,
+          onError: (error, context) => this.handleError(error, context)
+        });
+        this.behaviorPlugin.install(this);
+      }
+      if (config.plugins.performance) {
+        this.performancePlugin = new PerformancePlugin(config.performancePlugin);
+        this.performancePlugin.install(this);
+      }
+      if (config.plugins.whiteScreen) {
+        this.whiteScreenPlugin = new WhiteScreenPlugin(config.whiteScreenPlugin);
+        this.whiteScreenPlugin.install(this);
+      }
+    }
+    disposeBuiltinPlugins() {
+      var _a, _b, _c, _d;
+      (_a = this.performancePlugin) == null ? void 0 : _a.uninstall();
+      this.performancePlugin = null;
+      (_b = this.whiteScreenPlugin) == null ? void 0 : _b.uninstall();
+      this.whiteScreenPlugin = null;
+      (_c = this.behaviorPlugin) == null ? void 0 : _c.uninstall();
+      this.behaviorPlugin = null;
+      (_d = this.errorPlugin) == null ? void 0 : _d.uninstall();
+      this.errorPlugin = null;
+    }
+    runHook(callback, context) {
+      try {
+        callback();
+      } catch (error) {
+        this.handleError(error, context);
+      }
+    }
+    handleError(error, context, hooks) {
+      var _a, _b, _c;
+      try {
+        (_c = (_b = hooks != null ? hooks : (_a = this.config) == null ? void 0 : _a.hooks) == null ? void 0 : _b.onError) == null ? void 0 : _c.call(_b, error, context);
+      } catch (e) {
+      }
+    }
+  }
+  const traceCore = new TraceCore();
+
   const register = traceCore.register.bind(traceCore);
   const trackEvent = traceCore.trackEvent.bind(traceCore);
   const addCommonParams = traceCore.addCommonParams.bind(traceCore);
@@ -3637,6 +3781,7 @@
   const getEnvInfo = traceCore.getEnvInfo.bind(traceCore);
   const getConfig = traceCore.getConfig.bind(traceCore);
   const setReporter = traceCore.setReporter.bind(traceCore);
+  const flush = traceCore.flush.bind(traceCore);
   const destroy = traceCore.destroy.bind(traceCore);
   const EventTypeConstants = {
     CUSTOM: "custom",
@@ -3667,6 +3812,7 @@
   exports.deepClone = deepClone;
   exports.destroy = destroy;
   exports.findMatchedElement = findMatchedElement;
+  exports.flush = flush;
   exports.generateUUID = generateUUID;
   exports.getCommonParams = getCommonParams;
   exports.getConfig = getConfig;

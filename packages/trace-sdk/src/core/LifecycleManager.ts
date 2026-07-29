@@ -85,11 +85,12 @@ export class LifecycleManager {
     const isBeaconAvailable = typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function';
 
     const json = JSON.stringify(events);
+    const blob = new Blob([json], { type: 'application/json' });
 
-    // 单次 payload 不超过 60KB，直接发送
-    if (json.length <= MAX_BEACON_PAYLOAD) {
+    // 单次 payload 不超过 60KB，直接发送（用 Blob.size 精确计算 UTF-8 字节数）
+    if (blob.size <= MAX_BEACON_PAYLOAD) {
       if (isBeaconAvailable) {
-        navigator.sendBeacon(this.reportUrl, new Blob([json], { type: 'application/json' }));
+        navigator.sendBeacon(this.reportUrl, blob);
       } else {
         this.sendKeepalive(json);
       }
@@ -100,8 +101,9 @@ export class LifecycleManager {
     const chunks = this.chunkEvents(events);
     for (const chunk of chunks) {
       const chunkJson = JSON.stringify(chunk);
+      const chunkBlob = new Blob([chunkJson], { type: 'application/json' });
       if (isBeaconAvailable) {
-        navigator.sendBeacon(this.reportUrl, new Blob([chunkJson], { type: 'application/json' }));
+        navigator.sendBeacon(this.reportUrl, chunkBlob);
       } else {
         this.sendKeepalive(chunkJson);
       }
@@ -118,7 +120,8 @@ export class LifecycleManager {
     let currentSize = 0;
 
     for (const event of events) {
-      const eventSize = JSON.stringify(event).length;
+      // 用 Blob.size 精确计算 UTF-8 字节数，而非 String.length（UTF-16 码点数）
+      const eventSize = new Blob([JSON.stringify(event)], { type: 'application/json' }).size;
 
       if (currentSize + eventSize > MAX_BEACON_PAYLOAD && current.length > 0) {
         chunks.push(current);

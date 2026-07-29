@@ -14,6 +14,7 @@ import type {
 import { ErrorPlugin } from '../plugins/error/ErrorPlugin';
 import { BehaviorPlugin } from '../plugins/behavior/BehaviorPlugin';
 import { PerformancePlugin } from '../plugins/performance/PerformancePlugin';
+import { WhiteScreenPlugin } from '../plugins/whiteScreen/WhiteScreenPlugin';
 import { deepClone, isPlainObject } from '../utils';
 import { DefaultReporter } from './DefaultReporter';
 import { collectEnvInfo, refreshEnvInfo } from './env';
@@ -41,6 +42,7 @@ export class TraceCore implements ITraceCore {
   private errorPlugin: ErrorPlugin | null = null;
   private behaviorPlugin: BehaviorPlugin | null = null;
   private performancePlugin: PerformancePlugin | null = null;
+  private whiteScreenPlugin: WhiteScreenPlugin | null = null;
 
   register(config: TraceConfig): void {
     let hooks: TraceLifecycleHooks | undefined;
@@ -51,7 +53,7 @@ export class TraceCore implements ITraceCore {
 
       const resolvedConfig = Object.freeze({
         ...DEFAULT_CONFIG,
-        projectId: this.resolveProjectId(config),
+        appId: this.resolveAppId(config),
         reportUrl: config.reportUrl.trim(),
         sampleRate: this.resolveSampleRate(config.sampleRate, DEFAULT_CONFIG.sampleRate),
         maxBufferSize: this.resolveBufferSize(config.maxBufferSize, DEFAULT_CONFIG.maxBufferSize),
@@ -65,6 +67,7 @@ export class TraceCore implements ITraceCore {
         errorPlugin: this.resolvePluginConfig(config.errorPlugin, 'errorPlugin'),
         eventPlugin: this.resolvePluginConfig(config.eventPlugin, 'eventPlugin'),
         performancePlugin: this.resolvePluginConfig(config.performancePlugin, 'performancePlugin'),
+        whiteScreenPlugin: this.resolvePluginConfig(config.whiteScreenPlugin, 'whiteScreenPlugin'),
         hooks: Object.freeze(hooks),
       }) as ResolvedTraceConfig;
 
@@ -155,7 +158,7 @@ export class TraceCore implements ITraceCore {
       let event: TrackEventData = {
         eventType: normalizedEventType,
         eventName: normalizedEventName,
-        appId: this.config.projectId,
+        appId: this.config.appId,
         userId: this.readIdentity(commonParams, ['userId', 'user_id']),
         sessionId: this.readIdentity(commonParams, ['sessionId', 'session_id']),
         properties,
@@ -272,6 +275,14 @@ export class TraceCore implements ITraceCore {
       this.reporter = reporter;
     } catch (error) {
       this.handleError(error, 'setReporter');
+    }
+  }
+
+  flush(): void {
+    try {
+      this.reporter?.flush?.();
+    } catch (error) {
+      this.handleError(error, 'flush');
     }
   }
 
@@ -449,9 +460,9 @@ export class TraceCore implements ITraceCore {
       throw new TypeError('config is required');
     }
 
-    const projectId = (config.projectId || config.appId || '').trim();
-    if (!projectId) {
-      throw new TypeError('projectId or appId must be a non-empty string');
+    const appId = (config.appId || config.projectId || '').trim();
+    if (!appId) {
+      throw new TypeError('appId must be a non-empty string');
     }
     if (typeof config.reportUrl !== 'string' || !config.reportUrl.trim()) {
       throw new TypeError('reportUrl must be a non-empty string');
@@ -462,14 +473,14 @@ export class TraceCore implements ITraceCore {
       throw new TypeError('reportUrl must use http or https');
     }
 
-    if (config.projectId && config.appId && config.projectId !== config.appId && config.enableDebug) {
+    if (config.appId && config.projectId && config.appId !== config.projectId && config.enableDebug) {
       // eslint-disable-next-line no-console
-      console.warn('[TraceGA] Both projectId and appId provided; projectId takes precedence.');
+      console.warn('[TraceGA] Both appId and projectId provided; appId takes precedence.');
     }
   }
 
-  private resolveProjectId(config: TraceConfig): string {
-    return (config.projectId || config.appId || '').trim();
+  private resolveAppId(config: TraceConfig): string {
+    return (config.appId || config.projectId || '').trim();
   }
 
   private resolveHooks(config: unknown): TraceLifecycleHooks {
@@ -646,11 +657,18 @@ export class TraceCore implements ITraceCore {
       this.performancePlugin = new PerformancePlugin(config.performancePlugin);
       this.performancePlugin.install(this);
     }
+
+    if (config.plugins.whiteScreen) {
+      this.whiteScreenPlugin = new WhiteScreenPlugin(config.whiteScreenPlugin);
+      this.whiteScreenPlugin.install(this);
+    }
   }
 
   private disposeBuiltinPlugins(): void {
     this.performancePlugin?.uninstall();
     this.performancePlugin = null;
+    this.whiteScreenPlugin?.uninstall();
+    this.whiteScreenPlugin = null;
     this.behaviorPlugin?.uninstall();
     this.behaviorPlugin = null;
     this.errorPlugin?.uninstall();

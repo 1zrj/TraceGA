@@ -11,7 +11,7 @@ describe('public SDK API', () => {
     const reporter = { report: vi.fn() };
     traceCore.setReporter(reporter);
 
-    register({ projectId: 'api', reportUrl: '/api/track' });
+    register({ appId: 'api', reportUrl: '/api/track' });
     addCommonParams({ api_test: true });
     trackEvent('api_event', { source: 'public-api' }, 'high');
 

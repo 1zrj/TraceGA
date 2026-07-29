@@ -68,7 +68,7 @@ export const LoginPage: React.FC = () => {
             onFinish={onFinish}
             layout="vertical"
             size="large"
-            initialValues={{ email: 'admin@tracega.com', password: 'admin' }}
+            initialValues={{ email: 'admin@tracega.com', password: 'admin123' }}
           >
             <Form.Item
               name="email"

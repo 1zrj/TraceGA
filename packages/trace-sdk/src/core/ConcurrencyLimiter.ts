@@ -56,6 +56,14 @@ export class ConcurrencyLimiter {
   }
 
   /**
+   * 销毁并发限制器，清空等待队列并重置活跃计数。
+   */
+  destroy(): void {
+    this.waitQueue = [];
+    this.active = 0;
+  }
+
+  /**
    * 返回当前活跃的请求数。
    */
   getActiveCount(): number {
