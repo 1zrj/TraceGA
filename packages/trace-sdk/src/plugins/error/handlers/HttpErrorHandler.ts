@@ -1,7 +1,6 @@
 import type { ITraceCore } from '../../../types';
 import type { ErrorHandler, ErrorPayloadBase } from '../types';
-import { getBrowserContext } from '../types';
-import { sanitizeErrorUrl } from '../types';
+import { ErrorEventName, getBrowserContext, sanitizeErrorUrl } from '../types';
 
 type XhrMeta = {
   method: string;
@@ -9,7 +8,7 @@ type XhrMeta = {
 };
 
 export interface HttpErrorPayload extends ErrorPayloadBase {
-  type: 'http-error';
+  type: ErrorEventName.HttpError;
   requestType: 'fetch' | 'xhr';
   method?: string;
   requestUrl?: string;
@@ -17,7 +16,6 @@ export interface HttpErrorPayload extends ErrorPayloadBase {
   statusText?: string;
   duration?: number;
 }
-
 
 const FETCH_PATCH_KEY = Symbol.for('__tracega_http_fetch_patched__');
 const XHR_PATCH_KEY = Symbol.for('__tracega_http_xhr_patched__');
@@ -140,7 +138,7 @@ export class HttpErrorHandler implements ErrorHandler {
           const occurredAt = Date.now();
           const method = getFetchMethodStatic(input, init);
           queueHttpError({
-            type: 'http-error',
+            type: ErrorEventName.HttpError,
             requestType: 'fetch',
             message: `HTTP request failed: ${response.status}`,
             occurredAt,
@@ -159,7 +157,7 @@ export class HttpErrorHandler implements ErrorHandler {
           const occurredAt = Date.now();
           const method = getFetchMethodStatic(input, init);
           queueHttpError({
-            type: 'http-error',
+            type: ErrorEventName.HttpError,
             requestType: 'fetch',
             message: error instanceof Error ? error.message : 'Fetch request failed',
             occurredAt,
@@ -196,7 +194,6 @@ export class HttpErrorHandler implements ErrorHandler {
       patchedFetchRef = null;
     }
   }
-
 
   private installXhrPatch(): void {
     if (typeof XMLHttpRequest === 'undefined') {
@@ -245,7 +242,7 @@ export class HttpErrorHandler implements ErrorHandler {
 
         const occurredAt = Date.now();
         queueHttpError({
-          type: 'http-error',
+          type: ErrorEventName.HttpError,
           requestType: 'xhr',
           message: `HTTP request failed: ${xhr.status}`,
           occurredAt,
@@ -269,7 +266,7 @@ export class HttpErrorHandler implements ErrorHandler {
 
         const occurredAt = Date.now();
         queueHttpError({
-          type: 'http-error',
+          type: ErrorEventName.HttpError,
           requestType: 'xhr',
           message: 'XMLHttpRequest failed',
           occurredAt,
@@ -320,7 +317,6 @@ export class HttpErrorHandler implements ErrorHandler {
     }
   }
 
-
   private reportHttpError(payload: HttpErrorPayload): void {
     if (!this.core) {
       return;
@@ -331,10 +327,9 @@ export class HttpErrorHandler implements ErrorHandler {
       return;
     }
 
-    this.core.trackEvent('http-error', payload, 'urgent', 'error');
+    this.core.trackEvent(ErrorEventName.HttpError, payload, 'urgent', 'error');
   }
 }
-
 
 function getFetchMethodStatic(input: RequestInfo | URL, init?: RequestInit): string | undefined {
   if (init?.method) {

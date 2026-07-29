@@ -1,9 +1,9 @@
 import type { ITraceCore } from '../../../types';
 import type { ErrorHandler, ErrorPayloadBase } from '../types';
-import { getBrowserContext, sanitizeErrorUrl } from '../types';
+import { ErrorEventName, getBrowserContext, sanitizeErrorUrl } from '../types';
 
 export interface ResourceErrorPayload extends ErrorPayloadBase {
-  type: 'resource-error';
+  type: ErrorEventName.ResourceError;
   tagName?: string;
   resourceUrl?: string;
 }
@@ -16,7 +16,7 @@ export class ResourceErrorHandler implements ErrorHandler {
       return;
     }
 
-    this.core.trackEvent('resource-error', this.normalizeResourceError(event), 'urgent', 'error');
+    this.core.trackEvent(ErrorEventName.ResourceError, this.normalizeResourceError(event), 'urgent', 'error');
   };
 
   install(core: ITraceCore): void {
@@ -47,7 +47,7 @@ export class ResourceErrorHandler implements ErrorHandler {
     const tagName = target.tagName.toLowerCase();
 
     return {
-      type: 'resource-error',
+      type: ErrorEventName.ResourceError,
       message: `Resource load failed: ${tagName}`,
       occurredAt: Date.now(),
       tagName,
