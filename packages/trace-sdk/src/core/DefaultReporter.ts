@@ -10,6 +10,9 @@ type ReporterErrorHandler = (error: unknown, context: string) => void;
 
 const MAX_RETRY_ATTEMPTS = 2;
 
+/** 不可重试的错误标记：业务校验失败（如 eventName 不存在、appId 无效等）重试无意义 */
+const NON_RETRYABLE_MARKER = '__NON_RETRYABLE__';
+
 function getBatchUrl(reportUrl: string): string {
   const baseUrl = typeof window !== 'undefined' && window.location?.href ? window.location.href : 'http://tracega.local/';
   const parsedUrl = new URL(reportUrl, baseUrl);
@@ -201,7 +204,34 @@ export class DefaultReporter implements TraceReporter {
       if (!response.ok) {
         throw new Error(`TraceGA report failed with status ${response.status}`);
       }
+
+      // 批量接口即使业务失败也返回 200，需解析响应体检查
+      // 后端 TransformInterceptor 将结果包装在 { code, message, data } 中
+      try {
+        const body = await response.json();
+        const result = body?.data ?? body;
+        if (result && typeof result === 'object' && result.failedCount > 0) {
+          const reasons = Array.isArray(result.failures)
+            ? result.failures.map((f: { reason?: string; index?: number }) => `${f.index ?? '?'}:${f.reason ?? 'unknown'}`).join('; ')
+            : `failedCount=${result.failedCount}`;
+          const err = new Error(`TraceGA batch partial failure: ${reasons}`);
+          (err as any)[NON_RETRYABLE_MARKER] = true;
+          throw err;
+        }
+      } catch (parseError) {
+        // 如果是我们主动抛出的业务失败，向上抛出让外层 catch 处理
+        if (parseError instanceof Error && (parseError as any)[NON_RETRYABLE_MARKER]) {
+          throw parseError;
+        }
+        // 非 JSON 响应或解析失败忽略，正常业务下不应出现
+      }
     } catch (error) {
+      // 业务校验失败不重试（重试也无法通过校验）
+      if (error instanceof Error && (error as any)[NON_RETRYABLE_MARKER]) {
+        this.handleError(error, 'report.transport');
+        return;
+      }
+
       if (!this.destroyed && job.attempts < MAX_RETRY_ATTEMPTS) {
         const attempts = job.attempts + 1;
         this.jobQueue.push({ ...job, attempts });
@@ -258,29 +288,16 @@ export class DefaultReporter implements TraceReporter {
       return;
     }
 
-    const unsentJobs: BatchJob[] = [];
-    this.jobQueue.forEach(job => {
-      try {
-        const payload = safeJsonStringify({ events: job.events });
-        const body = new Blob([payload], { type: 'application/json' });
-
-        if (!navigator.sendBeacon(this.batchUrl, body)) {
-          unsentJobs.push(job);
-        }
-      } catch (error) {
-        unsentJobs.push(job);
-        this.handleError(error, 'report.beacon');
-      }
-    });
-
-    this.jobQueue = unsentJobs;
-    if (this.jobQueue.length > 0) {
-      this.scheduleFlush(this.flushInterval);
-    }
+    this.trySendQueuedJobsWithBeacon();
   }
 
   /** 降级方案：使用 sendBeacon 发送所有 job（pumpJobs 中 fetch 不可用时的兜底） */
   private sendJobsWithBeacon(): void {
+    this.trySendQueuedJobsWithBeacon();
+  }
+
+  /** 遍历 jobQueue，使用 sendBeacon 逐个发送，失败/异常则保留在队列中 */
+  private trySendQueuedJobsWithBeacon(): void {
     const unsentJobs: BatchJob[] = [];
 
     this.jobQueue.forEach(job => {
