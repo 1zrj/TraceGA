@@ -201,8 +201,8 @@
             <input type="text" id="reportUrl" value="http://localhost:3000/api/track" placeholder="http://localhost:3000/api/track">
           </div>
           <div class="form-group">
-            <label>项目 ID (projectId)</label>
-            <input type="text" id="projectId" value="debug-project" placeholder="debug-project">
+            <label>应用 ID (appId)</label>
+            <input type="text" id="appId" value="proj_test_001" placeholder="proj_test_001">
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -329,6 +329,16 @@
                   <option value="normal">normal</option>
                   <option value="high">high</option>
                   <option value="urgent">urgent</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>事件类型</label>
+                <select id="customEventType">
+                  <option value="custom">custom</option>
+                  <option value="click">click</option>
+                  <option value="page_view">page_view</option>
+                  <option value="exposure">exposure</option>
+                  <option value="error">error</option>
                 </select>
               </div>
             </div>
@@ -463,7 +473,7 @@
     // ========== SDK 操作 ==========
     function initSDK() {
       const config = {
-        projectId: document.getElementById('projectId').value || 'debug-project',
+        appId: document.getElementById('appId').value || 'debug-project',
         reportUrl: document.getElementById('reportUrl').value || 'http://localhost:3000/api/track',
         sampleRate: parseFloat(document.getElementById('sampleRate').value),
         maxBufferSize: parseInt(document.getElementById('maxBufferSize').value),
@@ -478,7 +488,7 @@
         },
         hooks: {
           onReady: (cfg) => {
-            addLog('INFO', 'SDK 初始化完成: projectId=' + cfg.projectId + ', reportUrl=' + cfg.reportUrl, 'success');
+            addLog('INFO', 'SDK 初始化完成: appId=' + cfg.appId + ', reportUrl=' + cfg.reportUrl, 'success');
             updateStatus(true);
           },
           onBeforeTrack: (event) => {
@@ -507,7 +517,7 @@
 
       try {
         addLog('INFO', '正在初始化 SDK... 配置: ' + JSON.stringify({
-          projectId: config.projectId,
+          appId: config.appId,
           reportUrl: config.reportUrl,
           sampleRate: config.sampleRate,
           maxBufferSize: config.maxBufferSize,
@@ -531,13 +541,19 @@
       try {
         TraceGASDK.destroy();
         updateStatus(false);
-        addLog('INFO', 'SDK 已销毁', 'info');
+        // 重置统计
+        stats.total = 0;
+        stats.success = 0;
+        stats.failed = 0;
+        stats.pending = 0;
+        updateStats();
+        addLog('INFO', 'SDK 已销毁（统计已重置）', 'info');
       } catch (e) {
         addLog('ERROR', '销毁失败: ' + e.message, 'error');
       }
     }
 
-    function buildEventProperties(eventType) {
+function buildEventProperties(eventType) {
       const base = { source: 'debug-panel' };
       switch (eventType) {
         case 'page_view':
@@ -563,7 +579,6 @@
       }
       return base;
     }
-
     function sendEvent(eventName, priority, eventType) {
       if (!sdkReady) {
         addLog('WARN', '请先初始化 SDK', 'error');
@@ -585,6 +600,7 @@
       }
       const name = document.getElementById('customEventName').value || 'custom_action';
       const priority = document.getElementById('customEventPriority').value;
+      const eventType = document.getElementById('customEventType').value;
       const paramsStr = document.getElementById('customEventParams').value;
       let params = {};
       try {
@@ -594,8 +610,8 @@
         return;
       }
       try {
-        TraceGASDK.trackEvent(name, params, priority);
-        addLog('SEND', '自定义事件: ' + name + ' (priority: ' + priority + ') ' + JSON.stringify(params), 'info');
+        TraceGASDK.trackEvent(name, params, priority, eventType);
+        addLog('SEND', '自定义事件: ' + name + ' (type: ' + eventType + ', priority: ' + priority + ') ' + JSON.stringify(params), 'info');
       } catch (e) {
         addLog('ERROR', '发送失败: ' + e.message, 'error');
       }
@@ -655,8 +671,7 @@
       const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
       if (url.includes('/api/track')) {
         addLog('NET', 'Fetch → ' + url, 'network');
-
-        // 从请求 body 中解析事件数量，用于准确更新 pending 计数
+// 从请求 body 中解析事件数量，用于准确更新 pending 计数
         let eventCount = 1;
         try {
           const body = args[1]?.body;
@@ -666,8 +681,20 @@
           }
         } catch { /* 解析失败使用默认值 */ }
 
-        return origFetch.apply(this, args).then(res => {
-          if (res.ok) {
+        return origFetch.apply(this, args).then(async res => {
+          // 先 clone 一份给 SDK 内部解析，本拦截器只读不消费
+          const clone = res.clone();
+          let isBatchError = false;
+          try {
+            const body = await clone.json();
+            if (body && typeof body === 'object' && body.failedCount > 0) {
+              isBatchError = true;
+            }
+          } catch {
+            // 非 JSON 响应忽略
+          }
+
+          if (res.ok && !isBatchError) {
             stats.success += eventCount;
             stats.pending = Math.max(0, stats.pending - eventCount);
             updateStats();
@@ -676,7 +703,8 @@
             stats.failed += eventCount;
             stats.pending = Math.max(0, stats.pending - eventCount);
             updateStats();
-            addLog('NET', '响应失败: ' + res.status + ' ' + res.statusText, 'error');
+            const detail = isBatchError ? ' (部分事件被拦截)' : (' ' + res.statusText);
+            addLog('NET', '响应失败: ' + res.status + detail, 'error');
           }
           return res;
         }).catch(err => {
