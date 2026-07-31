@@ -10,9 +10,6 @@ type ReporterErrorHandler = (error: unknown, context: string) => void;
 
 const MAX_RETRY_ATTEMPTS = 2;
 
-/** 不可重试的错误标记：业务校验失败（如 eventName 不存在、appId 无效等）重试无意义 */
-const NON_RETRYABLE_MARKER = '__NON_RETRYABLE__';
-
 function getBatchUrl(reportUrl: string): string {
   const baseUrl = typeof window !== 'undefined' && window.location?.href ? window.location.href : 'http://tracega.local/';
   const parsedUrl = new URL(reportUrl, baseUrl);
@@ -103,6 +100,11 @@ export class DefaultReporter implements TraceReporter {
     }
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+
+    // sendBeacon 未发出的剩余事件，最后用 fetch + keepalive 兜底
+    if (this.jobQueue.length > 0 && this.fetchImpl) {
+      this.sendJobsWithFetch();
     }
 
     this.eventQueue = [];
@@ -211,30 +213,26 @@ export class DefaultReporter implements TraceReporter {
         const body = await response.json();
         const result = body?.data ?? body;
         if (result && typeof result === 'object' && result.failedCount > 0) {
+          // 部分事件业务校验失败（如 eventName 未注册、缺少必填字段等）
+          // 成功的事件已由服务端存储，失败事件无法修复，直接丢弃不重试
           const reasons = Array.isArray(result.failures)
-            ? result.failures.map((f: { reason?: string; index?: number }) => `${f.index ?? '?'}:${f.reason ?? 'unknown'}`).join('; ')
+            ? result.failures.map((f: { reason?: string; index?: number }) => `[${f.index ?? '?'}] ${f.reason ?? 'unknown'}`).join('; ')
             : `failedCount=${result.failedCount}`;
-          const err = new Error(`TraceGA batch partial failure: ${reasons}`);
-          (err as any)[NON_RETRYABLE_MARKER] = true;
-          throw err;
+          this.handleError(new Error(`TraceGA batch partial failure (${result.failedCount}/${job.events.length}): ${reasons}`), 'report.batch.validation');
+          return;
         }
       } catch (parseError) {
-        // 如果是我们主动抛出的业务失败，向上抛出让外层 catch 处理
-        if (parseError instanceof Error && (parseError as any)[NON_RETRYABLE_MARKER]) {
-          throw parseError;
-        }
-        // 非 JSON 响应或解析失败忽略，正常业务下不应出现
+        this.handleError(new Error('TraceGA batch response is not valid JSON'), 'report.transport');
       }
     } catch (error) {
-      // 业务校验失败不重试（重试也无法通过校验）
-      if (error instanceof Error && (error as any)[NON_RETRYABLE_MARKER]) {
-        this.handleError(error, 'report.transport');
-        return;
-      }
-
       if (!this.destroyed && job.attempts < MAX_RETRY_ATTEMPTS) {
         const attempts = job.attempts + 1;
-        this.jobQueue.push({ ...job, attempts });
+        const delay = Math.min(1000 * Math.pow(2, attempts), 10000);
+        setTimeout(() => {
+          if (this.destroyed) return;
+          this.jobQueue.push({ ...job, attempts });
+          this.pumpJobs();
+        }, delay);
         return;
       }
 
