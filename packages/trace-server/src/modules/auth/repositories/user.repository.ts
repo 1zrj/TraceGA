@@ -56,7 +56,7 @@ export class UserRepository {
       username: user.username,
       email: user.email,
       phone: user.phone,
-      passwordHash: user.password_hash ?? user.password,
+      passwordHash: user.password_hash ?? '',
       role: user.role ?? 'admin',
       avatar: user.avatar,
       status: user.status ?? 1,
