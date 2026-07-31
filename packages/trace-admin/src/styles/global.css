@@ -1,0 +1,28 @@
+/* 全局样式入口 — @import 按优先级依次加载 */
+
+@import './tokens.css';   /* CSS Custom Properties 变量定义 */
+@import './reset.css';    /* 盒模型 / 字体 / 标签重置 */
+@import './b-theme.css';  /* B 端主题：[data-theme="b"] 紧凑高效 */
+@import './c-theme.css';  /* C 端主题：[data-theme="c"] 宽松友好 */
+
+/* tk- 命名空间工具类 */
+
+.tk-text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tk-text-mono {
+  font-family: var(--tk-font-family-mono, 'SF Mono', 'Fira Code', Consolas,
+    monospace);
+}
+
+.tk-scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tk-scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--tk-color-border, #d9d9d9);
+  border-radius: 3px;
+}

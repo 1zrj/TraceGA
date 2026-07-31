@@ -42,7 +42,9 @@ export interface WhiteScreenPluginConfig {
 }
 
 export interface TraceConfig {
-  projectId: string;
+  /** @deprecated 请使用 appId */
+  projectId?: string;
+  appId: string;
   reportUrl: string;
   sampleRate?: number;
   maxBufferSize?: number;
@@ -61,7 +63,7 @@ export interface TraceConfig {
 }
 
 export interface ResolvedTraceConfig {
-  projectId: string;
+  appId: string;
   reportUrl: string;
   sampleRate: number;
   maxBufferSize: number;
@@ -129,6 +131,7 @@ export interface ITraceCore {
   getEnvInfo(): EnvInfo | null;
   getConfig(): Readonly<ResolvedTraceConfig> | null;
   setReporter(reporter: TraceReporter | null): void;
+  flush(): void;
   destroy(): void;
 }
 

@@ -4,21 +4,27 @@ import { StoragePersister } from '../src/utils/StoragePersister';
 import type { TrackEventData } from '../src/types';
 
 function makeEvent(name: string): TrackEventData {
-  return {
+  const event: TrackEventData = {
     eventName: name,
+    eventType: 'custom',
+    appId: 'test',
+    properties: {},
     timestamp: Date.now(),
-    customParams: {},
-    commonParams: {},
-    envInfo: {
-      browser: 'Chrome',
-      os: 'Windows',
-      screen: '1920x1080',
-      viewport: '1920x1080',
-      uid: 'test',
-      url: 'http://localhost',
-      userAgent: 'test',
-    },
+    url: '',
+    referrer: '',
   };
+  (event as any).customParams = {};
+  (event as any).commonParams = {};
+  (event as any).envInfo = {
+    browser: 'Chrome',
+    os: 'Windows',
+    screen: '1920x1080',
+    viewport: '1920x1080',
+    uid: 'test',
+    url: 'http://localhost',
+    userAgent: 'test',
+  };
+  return event;
 }
 
 describe('PriorityScheduler', () => {

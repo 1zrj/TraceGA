@@ -25,6 +25,13 @@ export enum ErrorCode {
   ANALYSIS_QUERY_ERROR = 30001,
   ALARM_RULE_NOT_FOUND = 40001,
   AI_SERVICE_ERROR = 50001,
+
+  // Auth 模块错误码
+  USER_NOT_FOUND = 60001,
+  USERNAME_EXISTS = 60002,
+  INVALID_PASSWORD = 60003,
+  TOKEN_EXPIRED = 60004,
+  TOKEN_INVALID = 60005,
 }
 
 export type AlarmLevel = 'low' | 'medium' | 'high' | 'critical';

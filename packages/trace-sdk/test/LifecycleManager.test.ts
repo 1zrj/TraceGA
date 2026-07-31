@@ -3,13 +3,19 @@ import { LifecycleManager } from '../src/core/LifecycleManager';
 import type { TrackEventData } from '../src/types';
 
 function makeEvent(name: string): TrackEventData {
-  return {
+  const event: TrackEventData = {
     eventName: name,
+    eventType: 'custom',
+    appId: 'test',
+    properties: {},
     timestamp: Date.now(),
-    customParams: {},
-    commonParams: {},
-    envInfo: {} as any,
+    url: '',
+    referrer: '',
   };
+  (event as unknown as Record<string, unknown>).customParams = {};
+  (event as unknown as Record<string, unknown>).commonParams = {};
+  (event as unknown as Record<string, unknown>).envInfo = {} as any;
+  return event;
 }
 
 describe('LifecycleManager', () => {
@@ -141,13 +147,19 @@ describe('LifecycleManager', () => {
       const events: TrackEventData[] = [];
       const bigString = 'x'.repeat(1000);
       for (let i = 0; i < 100; i++) {
-        events.push({
+        const e: TrackEventData = {
           eventName: `event_${i}`,
+          eventType: 'custom',
+          appId: 'test',
+          properties: {},
           timestamp: Date.now(),
-          customParams: { data: bigString },
-          commonParams: {},
-          envInfo: {} as any,
-        });
+          url: '',
+          referrer: '',
+        };
+        (e as any).customParams = { data: bigString };
+        (e as any).commonParams = {};
+        (e as any).envInfo = {} as any;
+        events.push(e);
       }
       createManager({ events });
 

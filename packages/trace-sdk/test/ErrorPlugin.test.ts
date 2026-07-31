@@ -9,7 +9,7 @@ describe('ErrorPlugin', () => {
     core.setReporter(reporter);
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
       plugins: {
         error: true,
@@ -44,7 +44,7 @@ describe('ErrorPlugin', () => {
     reporter.report.mockClear();
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
       plugins: {
         error: false,
@@ -72,7 +72,7 @@ describe('ErrorPlugin', () => {
     core.setReporter(reporter);
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
       sampleRate: 0,
       plugins: {
@@ -252,7 +252,7 @@ describe('ErrorPlugin', () => {
 
     try {
       core.register({
-        projectId: 'test',
+        appId: 'test',
         reportUrl: 'http://localhost/api/track',
         plugins: {
           error: true,
@@ -289,7 +289,7 @@ describe('ErrorPlugin', () => {
       );
     } finally {
       core.register({
-        projectId: 'test',
+        appId: 'test',
         reportUrl: 'http://localhost/api/track',
         plugins: {
           error: false,

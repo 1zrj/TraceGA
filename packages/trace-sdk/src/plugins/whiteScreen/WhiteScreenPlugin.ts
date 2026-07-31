@@ -3,9 +3,7 @@ import type { ITraceCore, TracePlugin, EventPriority } from '../../types';
 // ─── 常量 ───
 
 /** 非视觉元素标签（不参与白屏判定），仅包含 body 内可能出现的标签 */
-const EXCLUDED_TAGS = new Set([
-  'SCRIPT', 'STYLE', 'LINK', 'META', 'NOSCRIPT', 'BR', 'HR',
-]);
+const EXCLUDED_TAGS = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'NOSCRIPT', 'BR', 'HR']);
 
 /** 像素对比截取高度 */
 const PIXEL_SAMPLE_HEIGHT = 100;

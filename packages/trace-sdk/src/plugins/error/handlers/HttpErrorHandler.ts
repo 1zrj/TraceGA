@@ -18,7 +18,6 @@ export interface HttpErrorPayload extends ErrorPayloadBase {
   duration?: number;
 }
 
-
 const FETCH_PATCH_KEY = Symbol.for('__tracega_http_fetch_patched__');
 const XHR_PATCH_KEY = Symbol.for('__tracega_http_xhr_patched__');
 
@@ -197,7 +196,6 @@ export class HttpErrorHandler implements ErrorHandler {
     }
   }
 
-
   private installXhrPatch(): void {
     if (typeof XMLHttpRequest === 'undefined') {
       return;
@@ -320,7 +318,6 @@ export class HttpErrorHandler implements ErrorHandler {
     }
   }
 
-
   private reportHttpError(payload: HttpErrorPayload): void {
     if (!this.core) {
       return;
@@ -334,7 +331,6 @@ export class HttpErrorHandler implements ErrorHandler {
     this.core.trackEvent('http-error', payload, 'urgent', 'error');
   }
 }
-
 
 function getFetchMethodStatic(input: RequestInfo | URL, init?: RequestInit): string | undefined {
   if (init?.method) {

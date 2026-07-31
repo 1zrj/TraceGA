@@ -86,6 +86,38 @@ export class DefaultReporter implements TraceReporter {
     this.pumpJobs();
   }
 
+  /** 清空队列、销毁 reporter，返回未发送的事件列表 */
+  drainEvents(): Array<{ event: TrackEventData; priority: EventPriority }> {
+    this.clearTimer();
+
+    const drained: Array<{ event: TrackEventData; priority: EventPriority }> = [];
+
+    // 收集 eventQueue 中的事件
+    while (this.eventQueue.length > 0) {
+      const event = this.eventQueue.shift()!;
+      drained.push({ event, priority: 'normal' });
+    }
+
+    // 收集 jobQueue 中的事件
+    while (this.jobQueue.length > 0) {
+      const job = this.jobQueue.shift()!;
+      job.events.forEach(event => {
+        drained.push({ event, priority: 'normal' });
+      });
+    }
+
+    this.destroyed = true;
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', this.handlePageHide);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+
+    return drained;
+  }
+
   destroy(): void {
     if (this.destroyed) {
       return;
