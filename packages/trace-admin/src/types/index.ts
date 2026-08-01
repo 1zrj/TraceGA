@@ -13,7 +13,6 @@ export interface Event {
   id: string
   eventName: string
   eventType: string
-  category: string
   appId: string
   description?: string
   propertySchema?: Record<string, unknown>
@@ -37,11 +36,12 @@ export interface AlarmItem {
   id: string
   name: string
   type: string
-  level: string
-  status: string
+  level: 'low' | 'medium' | 'high' | 'critical'
+  status: 'pending' | 'processing' | 'resolved' | 'closed'
   appId: string
   rule: string
-  notifyChannels: string[]
+  message: string
+  data: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }
@@ -52,6 +52,19 @@ export interface AlarmQueryDto {
   keyword?: string
   status?: string
   level?: string
+  appId?: string
+  startTime?: string
+  endTime?: string
+}
+
+export interface AlarmTrendItem {
+  time: string
+  count: number
+}
+
+export interface UpdateAlarmStatusDto {
+  status: 'processing' | 'resolved' | 'closed'
+  remark?: string
 }
 
 export interface PageInfo {

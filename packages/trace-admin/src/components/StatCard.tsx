@@ -17,6 +17,8 @@ export interface StatCardProps {
   variant?: Variant
   /** 加载态 — 显示骨架屏 */
   loading?: boolean
+  /** 顶部色条颜色（不传则不显示） */
+  accentColor?: string
 }
 
 // ─── 组件 ──────────────────────────────────────────────────────
@@ -28,6 +30,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   changeType = 'positive',
   variant = 'b',
   loading = false,
+  accentColor,
 }) => {
   return (
     <div
@@ -37,8 +40,22 @@ export const StatCard: React.FC<StatCardProps> = ({
         padding: variant === 'b' ? 20 : 28,
         borderRadius: variant === 'b' ? 'var(--tk-radius-md, 6px)' : 'var(--tk-radius-xl, 12px)',
         boxShadow: 'var(--tk-shadow-sm)',
+        overflow: 'hidden',
+        position: 'relative',
       }}
     >
+      {accentColor && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 4,
+            background: accentColor,
+          }}
+        />
+      )}
       {loading ? (
         <>
           <Skeleton.Input

@@ -9,6 +9,8 @@ import {
   AnalyticsTrendDto,
   AnalyticsEventTypeTrendDto,
   AnalyticsTopEventsDto,
+  AnalyticsErrorEventsDto,
+  AnalyticsErrorTrendDto,
 } from '../dto/analysis.dto';
 
 @Injectable()
@@ -51,7 +53,7 @@ export class AnalysisRepository {
 
     const result = await this.prisma.$queryRaw`
       SELECT 
-        DATE_FORMAT(created_at, ${dateFormat}) as date,
+        DATE_FORMAT(occurred_at, ${dateFormat}) as date,
         COUNT(*) as pv,
         COUNT(DISTINCT uid) as uv
       FROM event_log
@@ -66,14 +68,18 @@ export class AnalysisRepository {
   async getFiltered(query: AnalysisFilterDto) {
     const { appId, eventTypes, startTime, endTime } = query;
 
+    const where = this.buildRawWhere(appId, startTime, endTime);
+
+    const typeFilter: Prisma.Sql = eventTypes && eventTypes.length > 0 ? Prisma.sql`AND event_type IN (${Prisma.join(eventTypes)})` : Prisma.empty;
+
     const result = await this.prisma.$queryRaw`
       SELECT 
         event_name,
         event_type,
         COUNT(*) as count
       FROM event_log
-      ${this.buildRawWhere(appId, startTime, endTime)}
-      ${eventTypes && eventTypes.length > 0 ? `AND event_type IN (${eventTypes.map(() => '?').join(', ')})` : ''}
+      ${where}
+      ${typeFilter}
       GROUP BY event_name, event_type
       ORDER BY count DESC
       LIMIT 100
@@ -108,7 +114,7 @@ export class AnalysisRepository {
 
     const result = await this.prisma.$queryRaw`
       SELECT 
-        DATE_FORMAT(created_at, ${dateFormat}) as time,
+        DATE_FORMAT(occurred_at, ${dateFormat}) as time,
         COUNT(*) as count
       FROM event_log
       ${this.buildRawWhere(appId, startTime, endTime)}
@@ -126,13 +132,13 @@ export class AnalysisRepository {
 
     const logs = await this.prisma.event_log.findMany({
       where,
-      select: { created_at: true, event_type: true },
+      select: { occurred_at: true, event_type: true },
     });
 
     const map = new Map<string, Map<string, number>>();
 
     for (const log of logs) {
-      const d = new Date(log.created_at!);
+      const d = new Date(log.occurred_at!);
       const timeKey =
         interval === 'hour'
           ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:00:00`
@@ -190,6 +196,53 @@ export class AnalysisRepository {
     return { rate: totalEvents > 0 ? Number(((totalUsers.length / totalEvents) * 100).toFixed(2)) : 0 };
   }
 
+  async getErrorEvents(query: AnalyticsErrorEventsDto) {
+    const { appId, startTime, endTime } = query;
+
+    const where: Prisma.event_logWhereInput = {
+      event_type: 'error',
+      ...this.buildEventLogWhere(appId, startTime, endTime),
+    };
+
+    const logs = await this.prisma.event_log.findMany({
+      where,
+      orderBy: { occurred_at: 'desc' },
+      take: 50,
+    });
+
+    return logs.map(log => {
+      const params = log.event_params as Record<string, unknown> | null;
+      return {
+        id: String(log.id),
+        type: (params?.type as string) ?? 'js-error',
+        message: (params?.message as string) ?? '',
+        errorName: (params?.errorName as string) ?? (params?.name as string) ?? 'Unknown',
+        occurredAt: log.occurred_at ? new Date(log.occurred_at).toISOString().replace('T', ' ').slice(0, 19) : '',
+        duration: (params?.duration as number) ?? 0,
+        url: log.page_url ?? '',
+        status: 'active' as const,
+      };
+    });
+  }
+
+  async getErrorTrend(query: AnalyticsErrorTrendDto) {
+    const { appId, startTime, endTime } = query;
+
+    const where = this.buildRawWhere(appId, startTime, endTime, 'error');
+
+    const result = await this.prisma.$queryRaw`
+      SELECT 
+        DATE_FORMAT(occurred_at, '%Y-%m-%d') as time,
+        COUNT(*) as count
+      FROM event_log
+      ${where}
+      GROUP BY time
+      ORDER BY time ASC
+    `;
+
+    return result as Array<{ time: string; count: number }>;
+  }
+
   private buildEventLogWhere(appId?: string, startTime?: string, endTime?: string): Prisma.event_logWhereInput {
     const where: Prisma.event_logWhereInput = {};
 
@@ -205,31 +258,35 @@ export class AnalysisRepository {
       dateFilter.lte = new Date(endTime);
     }
     if (Object.keys(dateFilter).length > 0) {
-      where.created_at = dateFilter;
+      where.occurred_at = dateFilter;
     }
 
     return where;
   }
 
-  private buildRawWhere(appId?: string, startTime?: string, endTime?: string, eventType?: string) {
-    const conditions: string[] = [];
+  private buildRawWhere(appId?: string, startTime?: string, endTime?: string, eventType?: string): Prisma.Sql {
+    const conditions: Prisma.Sql[] = [];
 
     if (appId) {
-      conditions.push(`project_id = '${appId}'`);
+      conditions.push(Prisma.sql`project_id = ${appId}`);
     }
 
     if (startTime) {
-      conditions.push(`created_at >= '${startTime}'`);
+      conditions.push(Prisma.sql`occurred_at >= ${new Date(startTime)}`);
     }
 
     if (endTime) {
-      conditions.push(`created_at <= '${endTime}'`);
+      conditions.push(Prisma.sql`occurred_at <= ${new Date(endTime)}`);
     }
 
     if (eventType) {
-      conditions.push(`event_type = '${eventType}'`);
+      conditions.push(Prisma.sql`event_type = ${eventType}`);
     }
 
-    return conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    if (conditions.length === 0) {
+      return Prisma.empty;
+    }
+
+    return Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`;
   }
 }

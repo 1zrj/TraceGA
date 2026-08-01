@@ -28,8 +28,10 @@
   "dependencies": {
     "jsonwebtoken": "^9.0.3",
     "lodash.upperfirst": "^4.3.1",
+    "path-to-regexp": "^6.3.0",
     "react-draggable": "^4.4.6",
     "react-grid-layout": "2.2.3",
-    "react-resizable": "^4.0.2"
+    "react-resizable": "^4.0.2",
+    "tough-cookie": "^6.0.0"
   }
 }

@@ -1,0 +1,7 @@
+.row-striped {
+  background: #fafbfc;
+}
+
+.row-striped td.ant-table-cell {
+  background: inherit;
+}

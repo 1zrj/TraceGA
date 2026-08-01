@@ -19,6 +19,7 @@ import {
   nlQueryStream,
   recommendStream,
 } from '@/api'
+import { useAppStore } from '@/store'
 
 const { Title, Text } = Typography
 
@@ -55,6 +56,9 @@ const AiPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
+
+  // 从全局 store 读取 Dashboard 的日期筛选范围
+  const dashboardDateRange = useAppStore((s) => s.dashboardDateRange)
 
   // 新消息时自动滚动到底部
   useEffect(() => {
@@ -147,7 +151,11 @@ const AiPage: React.FC = () => {
         case 'analyze':
           startStream(
             analyzeStream,
-            { prompt: inputText || '数据分析', question: inputText || '数据分析' },
+            {
+              prompt: inputText || '数据分析',
+              question: inputText || '数据分析',
+              ...dashboardDateRange,
+            },
             inputText || '进行数据分析',
           )
           break
@@ -200,7 +208,7 @@ const AiPage: React.FC = () => {
 
     try {
       await analyzeStream(
-        { prompt: text, question: text },
+        { prompt: text, question: text, ...dashboardDateRange },
         {
           onText: (chunk) => {
             setMessages((prev) =>
@@ -227,7 +235,7 @@ const AiPage: React.FC = () => {
       setLoading(false)
       abortRef.current = null
     }
-  }, [input, loading])
+  }, [input, loading, dashboardDateRange])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -245,6 +253,16 @@ const AiPage: React.FC = () => {
           AI 分析助手
         </Title>
         <Text type="secondary">选择分析功能或输入自定义问题，快速获取数据洞察</Text>
+        {dashboardDateRange && (
+          <div style={{ marginTop: 8 }}>
+            <Text
+              type="secondary"
+              style={{ fontSize: 12, background: '#f0f5ff', padding: '2px 10px', borderRadius: 4 }}
+            >
+              分析范围：{dashboardDateRange.startTime} ~ {dashboardDateRange.endTime}
+            </Text>
+          </div>
+        )}
       </div>
 
       <div

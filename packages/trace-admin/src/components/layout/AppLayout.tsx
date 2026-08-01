@@ -21,7 +21,6 @@ import {
 } from '@ant-design/icons'
 import { useNavigate, useLocation, Outlet, Link } from 'react-router-dom'
 import { useAppStore } from '@/store/useAppStore'
-import { AiAssistantPanel } from '@/features/dashboard/components/AiAssistantPanel'
 import { cn, cnVar } from '@/utils/cn'
 import type { Variant } from '@/tokens'
 
@@ -94,6 +93,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   account: '账号设置',
   profile: '个人中心',
   users: '用户管理',
+  alarm: '告警管理',
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -440,7 +440,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           )}
         </Layout>
       </Layout>
-      <AiAssistantPanel />
     </div>
   )
 }

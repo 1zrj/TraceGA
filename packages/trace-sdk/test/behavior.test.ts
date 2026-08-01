@@ -9,9 +9,9 @@ class MockIntersectionObserver implements IntersectionObserver {
   readonly root = null;
   readonly rootMargin: string;
   readonly thresholds: readonly number[];
-  readonly observe = vi.fn<(target: Element) => void>();
-  readonly unobserve = vi.fn<(target: Element) => void>();
-  readonly disconnect = vi.fn<() => void>();
+  readonly observe = vi.fn() as unknown as (target: Element) => void;
+  readonly unobserve = vi.fn() as unknown as (target: Element) => void;
+  readonly disconnect = vi.fn() as unknown as () => void;
 
   constructor(
     private readonly callback: IntersectionObserverCallback,
@@ -63,7 +63,16 @@ describe('behavior utilities', () => {
     input.value = 'must-not-be-collected';
     input.setAttribute('data-trace-id', 'login-field');
 
+    // elementId requires explicit opt-in for privacy
     expect(getElementMetadata(input)).toEqual({
+      tagName: 'input',
+      traceId: 'login-field',
+      elementId: undefined,
+      role: undefined,
+      inputType: 'password',
+    });
+
+    expect(getElementMetadata(input, { collectElementId: true })).toEqual({
       tagName: 'input',
       traceId: 'login-field',
       elementId: 'x'.repeat(128),

@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common'
-import { AnalysisRepository } from '../repositories/analysis.repository'
+import { Injectable } from '@nestjs/common';
+import { AnalysisRepository } from '../repositories/analysis.repository';
 import {
   AnalysisSummaryDto,
   AnalysisTrendDto,
@@ -8,15 +8,17 @@ import {
   AnalyticsTrendDto,
   AnalyticsEventTypeTrendDto,
   AnalyticsTopEventsDto,
-} from '../dto/analysis.dto'
+  AnalyticsErrorEventsDto,
+  AnalyticsErrorTrendDto,
+} from '../dto/analysis.dto';
 
 @Injectable()
 export class AnalysisService {
   constructor(private readonly analysisRepository: AnalysisRepository) {}
 
   async getSummary(query: AnalysisSummaryDto) {
-    const { pv, uv, eventCount } = await this.analysisRepository.getSummary(query)
-    const rate = uv > 0 ? (pv / uv).toFixed(1) : '0'
+    const { pv, uv, eventCount } = await this.analysisRepository.getSummary(query);
+    const rate = uv > 0 ? (pv / uv).toFixed(1) : '0';
     return {
       pv,
       uv,
@@ -24,34 +26,42 @@ export class AnalysisService {
       startTime: query.startTime ?? '',
       endTime: query.endTime ?? '',
       eventCount,
-    }
+    };
   }
 
   async getTrend(query: AnalysisTrendDto) {
-    return this.analysisRepository.getTrend(query)
+    return this.analysisRepository.getTrend(query);
   }
 
   async getFiltered(query: AnalysisFilterDto) {
-    return this.analysisRepository.getFiltered(query)
+    return this.analysisRepository.getFiltered(query);
   }
 
   async getOverview(query: AnalyticsOverviewDto) {
-    return this.analysisRepository.getOverview(query)
+    return this.analysisRepository.getOverview(query);
   }
 
   async getEventTrend(query: AnalyticsTrendDto) {
-    return this.analysisRepository.getEventTrend(query)
+    return this.analysisRepository.getEventTrend(query);
   }
 
   async getEventTypeTrend(query: AnalyticsEventTypeTrendDto) {
-    return this.analysisRepository.getEventTypeTrend(query)
+    return this.analysisRepository.getEventTypeTrend(query);
   }
 
   async getTopEvents(query: AnalyticsTopEventsDto) {
-    return this.analysisRepository.getTopEvents(query)
+    return this.analysisRepository.getTopEvents(query);
   }
 
   async getConversionRate(query: AnalyticsOverviewDto) {
-    return this.analysisRepository.getConversionRate(query)
+    return this.analysisRepository.getConversionRate(query);
+  }
+
+  async getErrorEvents(query: AnalyticsErrorEventsDto) {
+    return this.analysisRepository.getErrorEvents(query);
+  }
+
+  async getErrorTrend(query: AnalyticsErrorTrendDto) {
+    return this.analysisRepository.getErrorTrend(query);
   }
 }

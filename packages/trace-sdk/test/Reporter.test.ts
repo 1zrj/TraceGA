@@ -6,7 +6,7 @@ describe('Reporter', () => {
   let reporter: Reporter;
   let fetchMock: ReturnType<typeof vi.fn>;
   const baseConfig: TraceConfig = {
-    projectId: 'test_project',
+    appId: 'test_project',
     reportUrl: 'https://api.example.com/report',
     sampleRate: 1,
     maxBufferSize: 5,
@@ -115,20 +115,28 @@ describe('Reporter', () => {
   });
 
   describe('公共参数', () => {
-    it('addCommonParams 应合并参数', () => {
+    it('addCommonParams 应合并参数', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
       reporter.addCommonParams({ a: 1 });
       reporter.addCommonParams({ b: 2 });
       reporter.trackEvent('test', {});
       reporter.flush();
-      expect(true).toBe(true);
+      await vi.advanceTimersByTimeAsync(0);
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+      expect(body[0].commonParams).toEqual({ a: 1, b: 2 });
+      fetchSpy.mockRestore();
     });
 
-    it('removeCommonParams 应移除指定 key', () => {
+    it('removeCommonParams 应移除指定 key', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
       reporter.addCommonParams({ a: 1, b: 2, c: 3 });
       reporter.removeCommonParams(['a', 'c']);
       reporter.trackEvent('test', {});
       reporter.flush();
-      expect(true).toBe(true);
+      await vi.advanceTimersByTimeAsync(0);
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+      expect(body[0].commonParams).toEqual({ b: 2 });
+      fetchSpy.mockRestore();
     });
   });
 
@@ -244,10 +252,15 @@ describe('Reporter', () => {
   });
 
   describe('destroy', () => {
-    it('应能重复 register 而不泄漏', () => {
+    it('应能重复 register 而不泄漏', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
       reporter.register(baseConfig);
       reporter.trackEvent('re_registered', {});
-      expect(true).toBe(true);
+      reporter.flush();
+      await vi.advanceTimersByTimeAsync(0);
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+      expect(body[0].eventName).toBe('re_registered');
+      fetchSpy.mockRestore();
     });
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TraceCore } from '../src';
-import type { CommonParams, EventPriority, ResolvedTraceConfig, TraceLifecycleHooks, TrackEventData } from '../src';
+import type { CommonParams, EventPriority, ResolvedTraceConfig, TraceLifecycleHooks, TrackEventData, TrackEventParams } from '../src';
 
 describe('TraceCore behavior', () => {
   it('silently ignores events before register', () => {
@@ -64,7 +64,7 @@ describe('TraceCore behavior', () => {
     const core = new TraceCore();
 
     expect(core.getEnvInfo()).toBeNull();
-    core.register({ projectId: 'test', reportUrl: '/api/track' });
+    core.register({ appId: 'test', reportUrl: '/api/track' });
 
     expect(core.getEnvInfo()).toEqual(
       expect.objectContaining({
@@ -85,7 +85,7 @@ describe('TraceCore behavior', () => {
 
     core.setReporter(reporter);
     core.register({
-      projectId: 'web-app',
+      appId: 'web-app',
       reportUrl: '/api/track',
       hooks: {
         onBeforeTrack(event) {
@@ -147,7 +147,7 @@ describe('TraceCore behavior', () => {
 
     core.setReporter(reporter);
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: '/api/track',
       sampleRate: 0,
     });
@@ -163,7 +163,7 @@ describe('TraceCore behavior', () => {
 
     core.setReporter(reporter);
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: '/api/track',
       sampleRate: 0.5,
     });
@@ -182,7 +182,7 @@ describe('TraceCore behavior', () => {
     const core = new TraceCore();
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: '/api/track',
       sampleRate: 1.1,
       hooks: { onError },
@@ -204,7 +204,7 @@ describe('TraceCore behavior', () => {
       });
       history.replaceState({}, '', '/env-start?token=one#secret');
       core.setReporter(reporter);
-      core.register({ projectId: 'test', reportUrl: '/api/track' });
+      core.register({ appId: 'test', reportUrl: '/api/track' });
 
       Object.defineProperty(window, 'innerWidth', {
         configurable: true,
@@ -232,13 +232,13 @@ describe('TraceCore behavior', () => {
 
   it('uses the default batch reporter when no reporter is injected', async () => {
     const originalFetch = window.fetch;
-    const fetchMock = vi.fn<typeof window.fetch>().mockResolvedValue(new Response(null, { status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 })) as unknown as typeof window.fetch & { mock: { calls: any[][] } };
     window.fetch = fetchMock;
     const core = new TraceCore();
 
     try {
       core.register({
-        projectId: 'test',
+        appId: 'test',
         reportUrl: '/api/track',
         maxBufferSize: 1,
       });
@@ -267,7 +267,7 @@ describe('TraceCore behavior', () => {
 
     core.setReporter(reporter);
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: '/api/track',
       enableAutoError: true,
     });
@@ -297,20 +297,20 @@ describe('TraceCore behavior', () => {
     const core = new TraceCore();
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: '/api/track',
       hooks: { onError },
     });
 
-    expect(() => core.trackEvent('', [])).not.toThrow();
+    expect(() => core.trackEvent('', {} as TrackEventParams)).not.toThrow();
     expect(onError).toHaveBeenCalledWith(expect.any(TypeError), 'trackEvent');
   });
 
   it('contains exceptions from config accessors during register', () => {
     const onError = vi.fn();
     const core = new TraceCore();
-    core.register({ projectId: 'test', reportUrl: '/api/track', hooks: { onError } });
-    const invalidConfig = { projectId: 'next', reportUrl: '/next' };
+    core.register({ appId: 'test', reportUrl: '/api/track', hooks: { onError } });
+    const invalidConfig = { appId: 'next', reportUrl: '/next' };
     Object.defineProperty(invalidConfig, 'hooks', {
       get() {
         throw new Error('getter boom');
@@ -327,17 +327,17 @@ describe('TraceCore behavior', () => {
     const hooks: TraceLifecycleHooks = {
       onReady(config) {
         const mutableConfig = config as ResolvedTraceConfig;
-        mutableConfig.projectId = 'mutated';
+        mutableConfig.appId = 'mutated';
         mutableConfig.sampleRate = 0;
       },
     };
 
     core.setReporter(reporter);
-    core.register({ projectId: 'original', reportUrl: '/api/track', hooks });
+    core.register({ appId: 'original', reportUrl: '/api/track', hooks });
     hooks.onBeforeTrack = () => false;
     core.trackEvent('still-reported');
 
-    expect(core.getConfig()).toEqual(expect.objectContaining({ projectId: 'original', sampleRate: 1 }));
+    expect(core.getConfig()).toEqual(expect.objectContaining({ appId: 'original', sampleRate: 1 }));
     expect(reporter.report).toHaveBeenCalledWith(expect.objectContaining({ eventName: 'still-reported' }), 'normal');
   });
 
@@ -351,7 +351,7 @@ describe('TraceCore behavior', () => {
     });
 
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: '/api/track',
       hooks: { onTrack, onError },
     });
@@ -369,12 +369,12 @@ describe('TraceCore behavior', () => {
   it('overwrites config on repeated register', () => {
     const core = new TraceCore();
 
-    core.register({ projectId: 'first', reportUrl: '/first' });
-    core.register({ projectId: 'second', reportUrl: '/second', sampleRate: 0.5 });
+    core.register({ appId: 'first', reportUrl: '/first' });
+    core.register({ appId: 'second', reportUrl: '/second', sampleRate: 0.5 });
 
     expect(core.getConfig()).toEqual(
       expect.objectContaining({
-        projectId: 'second',
+        appId: 'second',
         reportUrl: '/second',
         sampleRate: 0.5,
       }),

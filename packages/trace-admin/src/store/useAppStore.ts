@@ -21,6 +21,10 @@ interface AppState {
   login: (dto: LoginDto) => Promise<LoginResult>
   logout: () => void
   initializeAuth: () => void
+
+  // Dashboard dateRange（AI 分析需要感知筛选范围）
+  dashboardDateRange: { startTime?: string; endTime?: string } | null
+  setDashboardDateRange: (range: { startTime?: string; endTime?: string } | null) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -59,6 +63,9 @@ export const useAppStore = create<AppState>((set) => ({
       userInfo: null,
     })
   },
+
+  dashboardDateRange: null,
+  setDashboardDateRange: (range) => set({ dashboardDateRange: range }),
 
   initializeAuth: () => {
     const token = localStorage.getItem('token')
