@@ -86,6 +86,38 @@ export class DefaultReporter implements TraceReporter {
     this.pumpJobs();
   }
 
+  /** 清空队列、销毁 reporter，返回未发送的事件列表 */
+  drainEvents(): Array<{ event: TrackEventData; priority: EventPriority }> {
+    this.clearTimer();
+
+    const drained: Array<{ event: TrackEventData; priority: EventPriority }> = [];
+
+    // 收集 eventQueue 中的事件
+    while (this.eventQueue.length > 0) {
+      const event = this.eventQueue.shift()!;
+      drained.push({ event, priority: 'normal' });
+    }
+
+    // 收集 jobQueue 中的事件
+    while (this.jobQueue.length > 0) {
+      const job = this.jobQueue.shift()!;
+      job.events.forEach(event => {
+        drained.push({ event, priority: 'normal' });
+      });
+    }
+
+    this.destroyed = true;
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', this.handlePageHide);
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+
+    return drained;
+  }
+
   destroy(): void {
     if (this.destroyed) {
       return;
@@ -100,6 +132,11 @@ export class DefaultReporter implements TraceReporter {
     }
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    }
+
+    // sendBeacon 未发出的剩余事件，最后用 fetch + keepalive 兜底
+    if (this.jobQueue.length > 0 && this.fetchImpl) {
+      this.sendJobsWithFetch();
     }
 
     this.eventQueue = [];
@@ -201,10 +238,33 @@ export class DefaultReporter implements TraceReporter {
       if (!response.ok) {
         throw new Error(`TraceGA report failed with status ${response.status}`);
       }
+
+      // 批量接口即使业务失败也返回 200，需解析响应体检查
+      // 后端 TransformInterceptor 将结果包装在 { code, message, data } 中
+      try {
+        const body = await response.json();
+        const result = body?.data ?? body;
+        if (result && typeof result === 'object' && result.failedCount > 0) {
+          // 部分事件业务校验失败（如 eventName 未注册、缺少必填字段等）
+          // 成功的事件已由服务端存储，失败事件无法修复，直接丢弃不重试
+          const reasons = Array.isArray(result.failures)
+            ? result.failures.map((f: { reason?: string; index?: number }) => `[${f.index ?? '?'}] ${f.reason ?? 'unknown'}`).join('; ')
+            : `failedCount=${result.failedCount}`;
+          this.handleError(new Error(`TraceGA batch partial failure (${result.failedCount}/${job.events.length}): ${reasons}`), 'report.batch.validation');
+          return;
+        }
+      } catch (parseError) {
+        this.handleError(new Error('TraceGA batch response is not valid JSON'), 'report.transport');
+      }
     } catch (error) {
       if (!this.destroyed && job.attempts < MAX_RETRY_ATTEMPTS) {
         const attempts = job.attempts + 1;
-        this.jobQueue.push({ ...job, attempts });
+        const delay = Math.min(1000 * Math.pow(2, attempts), 10000);
+        setTimeout(() => {
+          if (this.destroyed) return;
+          this.jobQueue.push({ ...job, attempts });
+          this.pumpJobs();
+        }, delay);
         return;
       }
 
@@ -258,29 +318,16 @@ export class DefaultReporter implements TraceReporter {
       return;
     }
 
-    const unsentJobs: BatchJob[] = [];
-    this.jobQueue.forEach(job => {
-      try {
-        const payload = safeJsonStringify({ events: job.events });
-        const body = new Blob([payload], { type: 'application/json' });
-
-        if (!navigator.sendBeacon(this.batchUrl, body)) {
-          unsentJobs.push(job);
-        }
-      } catch (error) {
-        unsentJobs.push(job);
-        this.handleError(error, 'report.beacon');
-      }
-    });
-
-    this.jobQueue = unsentJobs;
-    if (this.jobQueue.length > 0) {
-      this.scheduleFlush(this.flushInterval);
-    }
+    this.trySendQueuedJobsWithBeacon();
   }
 
   /** 降级方案：使用 sendBeacon 发送所有 job（pumpJobs 中 fetch 不可用时的兜底） */
   private sendJobsWithBeacon(): void {
+    this.trySendQueuedJobsWithBeacon();
+  }
+
+  /** 遍历 jobQueue，使用 sendBeacon 逐个发送，失败/异常则保留在队列中 */
+  private trySendQueuedJobsWithBeacon(): void {
     const unsentJobs: BatchJob[] = [];
 
     this.jobQueue.forEach(job => {

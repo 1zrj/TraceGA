@@ -25,14 +25,14 @@ describe('Reporter exports', () => {
 
     expect(() => {
       core.register({
-        projectId: 'test',
+        appId: 'test',
         reportUrl: 'http://localhost/api',
       });
     }).not.toThrow();
 
     expect(core.getConfig()).toEqual(
       expect.objectContaining({
-        projectId: 'test',
+        appId: 'test',
         sampleRate: 1,
         maxBufferSize: 20,
         flushInterval: 3000,
@@ -46,7 +46,7 @@ describe('Reporter exports', () => {
 
     core.setReporter(reporter);
     core.register({
-      projectId: 'test',
+      appId: 'test',
       reportUrl: 'http://localhost/api',
     });
     core.addCommonParams({ channel: 'web' });

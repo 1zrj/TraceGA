@@ -44,13 +44,13 @@ export class AiController {
   @Post('nl-query')
   @HttpCode(HttpStatus.OK)
   async nlQuery(@Body() dto: NlQueryDto) {
-    return this.nlQueryService.processQuery(dto)
+    return this.nlQueryService.processQuery(dto);
   }
 
   @Post('recommend')
   @HttpCode(HttpStatus.OK)
   async recommend(@Body() dto: RecommendDto) {
-    return this.recommendService.recommend(dto)
+    return this.recommendService.recommend(dto);
   }
 
   // ===== 流式 =====

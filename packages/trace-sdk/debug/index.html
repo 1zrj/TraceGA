@@ -215,8 +215,8 @@
             <input type="text" id="reportUrl" value="http://localhost:3000/api/track" placeholder="http://localhost:3000/api/track">
           </div>
           <div class="form-group">
-            <label>项目 ID (projectId)</label>
-            <input type="text" id="projectId" value="debug-project" placeholder="debug-project">
+            <label>应用 ID (appId)</label>
+            <input type="text" id="appId" value="proj_test_001" placeholder="proj_test_001">
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -309,16 +309,16 @@
         <div class="panel-body">
           <div class="section-title">基础事件</div>
           <div class="event-grid">
-            <button class="event-btn" onclick="sendEvent('custom_event', 'normal')">
+            <button class="event-btn" onclick="sendEvent('custom_event', 'normal', 'custom')">
               <span class="icon">📝</span>自定义事件
             </button>
-            <button class="event-btn" onclick="sendEvent('button_click', 'normal')">
+            <button class="event-btn" onclick="sendEvent('button_click', 'normal', 'click')">
               <span class="icon">👆</span>点击事件
             </button>
-            <button class="event-btn" onclick="sendEvent('page_view', 'normal')">
+            <button class="event-btn" onclick="sendEvent('page_view', 'normal', 'page_view')">
               <span class="icon">📄</span>页面浏览
             </button>
-            <button class="event-btn" onclick="sendEvent('exposure_event', 'normal')">
+            <button class="event-btn" onclick="sendEvent('exposure_event', 'normal', 'exposure')">
               <span class="icon">👁</span>曝光事件
             </button>
           </div>
@@ -359,9 +359,9 @@
 
           <div class="section-title" style="margin-top:12px;">优先级测试</div>
           <div class="btn-row">
-            <button class="btn btn-sm" style="border-color:#f85149;color:#f85149;" onclick="sendEvent('urgent_test', 'urgent')">urgent</button>
-            <button class="btn btn-sm" style="border-color:#d29922;color:#d29922;" onclick="sendEvent('high_test', 'high')">high</button>
-            <button class="btn btn-sm" onclick="sendEvent('normal_test', 'normal')">normal</button>
+            <button class="btn btn-sm" style="border-color:#f85149;color:#f85149;" onclick="sendEvent('urgent_test', 'urgent', 'custom')">urgent</button>
+            <button class="btn btn-sm" style="border-color:#d29922;color:#d29922;" onclick="sendEvent('high_test', 'high', 'custom')">high</button>
+            <button class="btn btn-sm" onclick="sendEvent('normal_test', 'normal', 'custom')">normal</button>
           </div>
 
           <div class="section-title" style="margin-top:12px;">自定义参数事件</div>
@@ -377,6 +377,16 @@
                   <option value="normal">normal</option>
                   <option value="high">high</option>
                   <option value="urgent">urgent</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>事件类型</label>
+                <select id="customEventType">
+                  <option value="custom">custom</option>
+                  <option value="click">click</option>
+                  <option value="page_view">page_view</option>
+                  <option value="exposure">exposure</option>
+                  <option value="error">error</option>
                 </select>
               </div>
             </div>
@@ -452,7 +462,7 @@
     </div>
   </div>
 
-  <script src="../dist/index.umd.js"></script>
+  <script src="/dist/index.umd.js"></script>
   <script>
     // ========== 状态管理 ==========
     const stats = { total: 0, success: 0, failed: 0, pending: 0 };
@@ -515,7 +525,7 @@
     // ========== SDK 操作 ==========
     function initSDK() {
       const config = {
-        projectId: document.getElementById('projectId').value || 'debug-project',
+        appId: document.getElementById('appId').value || 'debug-project',
         reportUrl: document.getElementById('reportUrl').value || 'http://localhost:3000/api/track',
         sampleRate: parseFloat(document.getElementById('sampleRate').value),
         maxBufferSize: parseInt(document.getElementById('maxBufferSize').value),
@@ -561,7 +571,7 @@
 
       try {
         addLog('INFO', '正在初始化 SDK... 配置: ' + JSON.stringify({
-          projectId: config.projectId,
+          appId: config.appId,
           reportUrl: config.reportUrl,
           sampleRate: config.sampleRate,
           maxBufferSize: config.maxBufferSize,
@@ -588,20 +598,53 @@
         errorPluginReady = false;
         whiteScreenPluginReady = false;
         updateStatus(false);
-        addLog('INFO', 'SDK 已销毁', 'info');
+        // 重置统计
+        stats.total = 0;
+        stats.success = 0;
+        stats.failed = 0;
+        stats.pending = 0;
+        updateStats();
+        addLog('INFO', 'SDK 已销毁（统计已重置）', 'info');
       } catch (e) {
         addLog('ERROR', '销毁失败: ' + e.message, 'error');
       }
     }
 
-    function sendEvent(eventName, priority) {
+function buildEventProperties(eventType) {
+      const base = { source: 'debug-panel' };
+      switch (eventType) {
+        case 'page_view':
+          base.url = window.location.href;
+          break;
+        case 'click':
+          base.elementId = 'debug-btn-' + Date.now();
+          break;
+        case 'error':
+          base.message = 'Debug test error at ' + new Date().toISOString();
+          base.stack = 'Error: debug test\n    at sendEvent (debug)';
+          break;
+        case 'performance':
+          base.fcp = Math.random() * 1000 + 500;
+          base.lcp = Math.random() * 2000 + 1000;
+          break;
+        case 'white_screen':
+          base.blankDuration = 0;
+          base.domCount = 100;
+          break;
+        default:
+          break;
+      }
+      return base;
+    }
+    function sendEvent(eventName, priority, eventType) {
       if (!sdkReady) {
         addLog('WARN', '请先初始化 SDK', 'error');
         return;
       }
       try {
-        TraceGASDK.trackEvent(eventName, { source: 'debug-panel', priority }, priority);
-        addLog('SEND', '发送事件: ' + eventName + ' (priority: ' + priority + ')', 'info');
+        const props = buildEventProperties(eventType);
+        TraceGASDK.trackEvent(eventName, props, priority, eventType);
+        addLog('SEND', '发送事件: ' + eventName + ' (type: ' + eventType + ', priority: ' + priority + ')', 'info');
       } catch (e) {
         addLog('ERROR', '发送失败: ' + e.message, 'error');
       }
@@ -614,6 +657,7 @@
       }
       const name = document.getElementById('customEventName').value || 'custom_action';
       const priority = document.getElementById('customEventPriority').value;
+      const eventType = document.getElementById('customEventType').value;
       const paramsStr = document.getElementById('customEventParams').value;
       let params = {};
       try {
@@ -623,8 +667,8 @@
         return;
       }
       try {
-        TraceGASDK.trackEvent(name, params, priority);
-        addLog('SEND', '自定义事件: ' + name + ' (priority: ' + priority + ') ' + JSON.stringify(params), 'info');
+        TraceGASDK.trackEvent(name, params, priority, eventType);
+        addLog('SEND', '自定义事件: ' + name + ' (type: ' + eventType + ', priority: ' + priority + ') ' + JSON.stringify(params), 'info');
       } catch (e) {
         addLog('ERROR', '发送失败: ' + e.message, 'error');
       }
@@ -638,7 +682,7 @@
       addLog('INFO', '开始批量发送 ' + count + ' 个事件...', 'info');
       for (let i = 0; i < count; i++) {
         try {
-          TraceGASDK.trackEvent('batch_event_' + i, { index: i, batch: true });
+          TraceGASDK.trackEvent('batch_event_' + i, { index: i, batch: true, elementId: 'batch-btn-' + i }, 'normal', 'click');
         } catch (e) {
           addLog('ERROR', '批量发送 #' + i + ' 失败: ' + e.message, 'error');
           break;
@@ -820,8 +864,7 @@
       const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
       if (url.includes('/api/track')) {
         addLog('NET', 'Fetch → ' + url, 'network');
-
-        // 从请求 body 中解析事件数量，用于准确更新 pending 计数
+// 从请求 body 中解析事件数量，用于准确更新 pending 计数
         let eventCount = 1;
         try {
           const body = args[1]?.body;
@@ -831,8 +874,20 @@
           }
         } catch { /* 解析失败使用默认值 */ }
 
-        return origFetch.apply(this, args).then(res => {
-          if (res.ok) {
+        return origFetch.apply(this, args).then(async res => {
+          // 先 clone 一份给 SDK 内部解析，本拦截器只读不消费
+          const clone = res.clone();
+          let isBatchError = false;
+          try {
+            const body = await clone.json();
+            if (body && typeof body === 'object' && body.failedCount > 0) {
+              isBatchError = true;
+            }
+          } catch {
+            // 非 JSON 响应忽略
+          }
+
+          if (res.ok && !isBatchError) {
             stats.success += eventCount;
             stats.pending = Math.max(0, stats.pending - eventCount);
             updateStats();
@@ -841,7 +896,8 @@
             stats.failed += eventCount;
             stats.pending = Math.max(0, stats.pending - eventCount);
             updateStats();
-            addLog('NET', '响应失败: ' + res.status + ' ' + res.statusText, 'error');
+            const detail = isBatchError ? ' (部分事件被拦截)' : (' ' + res.statusText);
+            addLog('NET', '响应失败: ' + res.status + detail, 'error');
           }
           return res;
         }).catch(err => {

@@ -1,11 +1,11 @@
 /// <reference types="jest" />
 
-import 'reflect-metadata'
-import { TrackRepository } from '../repositories/track.repository'
-import { PrismaService } from '@/database/prisma.service'
+import 'reflect-metadata';
+import { TrackRepository } from '../repositories/track.repository';
+import { PrismaService } from '@/database/prisma.service';
 
-jest.mock('@generated/prisma', () => ({ Prisma: { JsonNull: null } }), { virtual: true })
-jest.mock('@/database/prisma.service', () => ({ PrismaService: class {} }), { virtual: true })
+jest.mock('@generated/prisma', () => ({ Prisma: { JsonNull: null } }), { virtual: true });
+jest.mock('@/database/prisma.service', () => ({ PrismaService: class {} }), { virtual: true });
 
 describe('TrackRepository', () => {
   const prisma = {
@@ -15,13 +15,13 @@ describe('TrackRepository', () => {
       create: jest.fn(),
       createMany: jest.fn(),
     },
-  }
-  const repository = new TrackRepository(prisma as unknown as PrismaService)
+  };
+  const repository = new TrackRepository(prisma as unknown as PrismaService);
 
-  beforeEach(() => jest.clearAllMocks())
+  beforeEach(() => jest.clearAllMocks());
 
   it('loads projects and active event definitions in bulk', async () => {
-    prisma.project.findMany.mockResolvedValue([{ project_id: 'app_001' }])
+    prisma.project.findMany.mockResolvedValue([{ project_id: 'app_001' }]);
     prisma.event_definition.findMany.mockResolvedValue([
       {
         project_id: 'app_001',
@@ -29,13 +29,13 @@ describe('TrackRepository', () => {
         event_type: 'page_view',
         param_schema: { type: 'object' },
       },
-    ])
+    ]);
 
-    await expect(repository.findExistingProjects(['app_001', 'app_001'])).resolves.toEqual(new Set(['app_001']))
+    await expect(repository.findExistingProjects(['app_001', 'app_001'])).resolves.toEqual(new Set(['app_001']));
     await expect(repository.findActiveEventDefinitions(['app_001'], ['page_view'])).resolves.toEqual([
       { appId: 'app_001', eventName: 'page_view', eventType: 'page_view', propertySchema: { type: 'object' } },
-    ])
-  })
+    ]);
+  });
 
   it('maps one event to event_log fields', async () => {
     await repository.insertEvent(
@@ -54,7 +54,7 @@ describe('TrackRepository', () => {
       },
       '127.0.0.1',
       'jest',
-    )
+    );
 
     expect(prisma.event_log.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -69,18 +69,18 @@ describe('TrackRepository', () => {
         ip: '127.0.0.1',
         user_agent: 'jest',
       }),
-    })
-  })
+    });
+  });
 
   it('uses one createMany call for a batch and skips an empty batch', async () => {
     const events = [
       { eventType: 'custom', eventName: 'event_one', appId: 'app_001' },
       { eventType: 'custom', eventName: 'event_two', appId: 'app_001' },
-    ]
-    await repository.insertBatch(events, '', '')
-    await repository.insertBatch([], '', '')
+    ];
+    await repository.insertBatch(events, '', '');
+    await repository.insertBatch([], '', '');
 
-    expect(prisma.event_log.createMany).toHaveBeenCalledTimes(1)
-    expect(prisma.event_log.createMany.mock.calls[0][0].data).toHaveLength(2)
-  })
-})
+    expect(prisma.event_log.createMany).toHaveBeenCalledTimes(1);
+    expect(prisma.event_log.createMany.mock.calls[0][0].data).toHaveLength(2);
+  });
+});

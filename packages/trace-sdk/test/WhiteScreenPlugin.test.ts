@@ -32,6 +32,7 @@ function createMockCore(overrides: Partial<ITraceCore> = {}): ITraceCore {
     getEnvInfo: vi.fn().mockReturnValue(null),
     getConfig: vi.fn().mockReturnValue(null),
     setReporter: vi.fn(),
+    flush: vi.fn(),
     destroy: vi.fn(),
     ...overrides,
   };
@@ -94,22 +95,12 @@ function installPlugin(plugin: WhiteScreenPlugin, core: ITraceCore, readyState: 
 
 /** 断言已上报白屏事件 */
 function assertWhiteScreenReported(core: ITraceCore, overrides: Record<string, unknown> = {}): void {
-  expect(core.trackEvent).toHaveBeenCalledWith(
-    EVENT_WHITE_SCREEN,
-    expect.objectContaining({ detectMethod: 'elementCount', elementCount: 0, ...overrides }),
-    'high',
-    'error',
-  );
+  expect(core.trackEvent).toHaveBeenCalledWith(EVENT_WHITE_SCREEN, expect.objectContaining({ detectMethod: 'elementCount', elementCount: 0, ...overrides }), 'high', 'error');
 }
 
 /** 断言已上报白屏恢复事件 */
 function assertRecoveredReported(core: ITraceCore): void {
-  expect(core.trackEvent).toHaveBeenLastCalledWith(
-    EVENT_RECOVERED,
-    expect.any(Object),
-    'high',
-    'error',
-  );
+  expect(core.trackEvent).toHaveBeenLastCalledWith(EVENT_RECOVERED, expect.any(Object), 'high', 'error');
 }
 
 /** 断言未触发任何上报 */
@@ -128,7 +119,7 @@ describe('WhiteScreenPlugin', () => {
   });
 
   afterEach(() => {
-    installedPlugins.splice(0).forEach((p) => p.uninstall());
+    installedPlugins.splice(0).forEach(p => p.uninstall());
     vi.restoreAllMocks();
     vi.useRealTimers();
     document.body.innerHTML = '';

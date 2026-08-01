@@ -10,7 +10,7 @@ function makeEvent(name: string): TrackEventData {
     timestamp: Date.now(),
     properties: {},
     url: 'http://localhost',
-    userAgent: 'test',
+    referrer: '',
   };
 }
 

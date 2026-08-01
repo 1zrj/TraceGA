@@ -9,9 +9,9 @@ class MockIntersectionObserver implements IntersectionObserver {
   readonly root = null;
   readonly rootMargin: string;
   readonly thresholds: readonly number[];
-  readonly observe = vi.fn<(target: Element) => void>();
-  readonly unobserve = vi.fn<(target: Element) => void>();
-  readonly disconnect = vi.fn<() => void>();
+  readonly observe = vi.fn() as unknown as (target: Element) => void;
+  readonly unobserve = vi.fn() as unknown as (target: Element) => void;
+  readonly disconnect = vi.fn() as unknown as () => void;
 
   constructor(
     private readonly callback: IntersectionObserverCallback,

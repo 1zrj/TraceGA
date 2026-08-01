@@ -1,6 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
-import { readFileSync, readdirSync, watch } from 'fs'
-import { resolve } from 'path'
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { readFileSync, readdirSync, watch } from 'fs';
+import { resolve } from 'path';
 
 /**
  * PromptService
@@ -17,56 +17,56 @@ import { resolve } from 'path'
  */
 @Injectable()
 export class PromptService implements OnModuleInit {
-  private readonly logger = new Logger(PromptService.name)
+  private readonly logger = new Logger(PromptService.name);
 
   /** Prompt 模板文件存放目录 */
-  private readonly promptsDir: string
+  private readonly promptsDir: string;
 
   /** 缓存：文件名 → 模板内容 */
-  private readonly cache = new Map<string, string>()
+  private readonly cache = new Map<string, string>();
 
   constructor() {
     // __dirname 当前是 services/ 目录，prompts/ 在它上面一层
-    this.promptsDir = resolve(__dirname, '..', 'prompts')
+    this.promptsDir = resolve(__dirname, '..', 'prompts');
   }
 
   // ===== 生命周期：启动时加载 + 热重载 =====
 
   onModuleInit() {
-    this.loadAll()
-    this.watchHotReload()
+    this.loadAll();
+    this.watchHotReload();
   }
 
   /**
    * 启动时扫描 prompts 目录，将所有 .txt 文件读入缓存
    */
   private loadAll() {
-    let files: string[]
+    let files: string[];
     try {
-      files = readdirSync(this.promptsDir)
+      files = readdirSync(this.promptsDir);
     } catch (err) {
-      this.logger.error(`无法读取 Prompts 目录: ${this.promptsDir}`, err)
-      return
+      this.logger.error(`无法读取 Prompts 目录: ${this.promptsDir}`, err);
+      return;
     }
 
     for (const file of files) {
-      if (!file.endsWith('.txt')) continue
-      this.loadFileToCache(file)
+      if (!file.endsWith('.txt')) continue;
+      this.loadFileToCache(file);
     }
 
-    this.logger.log(`Prompt 模板加载完成，共 ${this.cache.size} 个文件`)
+    this.logger.log(`Prompt 模板加载完成，共 ${this.cache.size} 个文件`);
   }
 
   /**
    * 将单个文件读入缓存
    */
   private loadFileToCache(fileName: string) {
-    const filePath = resolve(this.promptsDir, fileName)
+    const filePath = resolve(this.promptsDir, fileName);
     try {
-      const content = readFileSync(filePath, 'utf8')
-      this.cache.set(fileName, content)
+      const content = readFileSync(filePath, 'utf8');
+      this.cache.set(fileName, content);
     } catch (err) {
-      this.logger.error(`无法读取 Prompt 文件: ${filePath}`, err)
+      this.logger.error(`无法读取 Prompt 文件: ${filePath}`, err);
     }
   }
 
@@ -78,10 +78,10 @@ export class PromptService implements OnModuleInit {
   private watchHotReload() {
     try {
       const watcher = watch(this.promptsDir, (eventType, fileName) => {
-        if (!fileName || !fileName.endsWith('.txt')) return
-        this.logger.log(`Prompt 文件变更 (${eventType}): ${fileName}，重新加载`)
-        this.loadFileToCache(fileName)
-      })
+        if (!fileName || !fileName.endsWith('.txt')) return;
+        this.logger.log(`Prompt 文件变更 (${eventType}): ${fileName}，重新加载`);
+        this.loadFileToCache(fileName);
+      });
       // 当进程退出或模块销毁时，watcher 会被自动垃圾回收
       // 不显式调用 watcher.close()，因为 PromptService 是 singleton，存活于整个进程生命周期
     } catch {
@@ -103,7 +103,7 @@ export class PromptService implements OnModuleInit {
    *   → 读取 prompts/analyze.system.txt，把 {{appName}} 替换为 "我的应用"
    */
   system(name: string, vars: Record<string, string> = {}): string {
-    return this.load(`${name}.system.txt`, vars)
+    return this.load(`${name}.system.txt`, vars);
   }
 
   /**
@@ -114,7 +114,7 @@ export class PromptService implements OnModuleInit {
    * @returns     替换后的 user prompt 文本
    */
   user(name: string, vars: Record<string, string> = {}): string {
-    return this.load(`${name}.user.txt`, vars)
+    return this.load(`${name}.user.txt`, vars);
   }
 
   /**
@@ -123,19 +123,19 @@ export class PromptService implements OnModuleInit {
    * 缓存 miss 时仍尝试从磁盘读取（兼容缓存未初始化或新文件热加载前的边界情况）。
    */
   private load(fileName: string, vars: Record<string, string>): string {
-    let raw = this.cache.get(fileName)
+    let raw = this.cache.get(fileName);
 
     // 缓存 miss：从磁盘读取（兜底）
     if (raw === undefined) {
-      this.loadFileToCache(fileName)
-      raw = this.cache.get(fileName)
+      this.loadFileToCache(fileName);
+      raw = this.cache.get(fileName);
     }
 
     if (raw === undefined) {
-      throw new Error(`Prompt 文件不存在或无法读取: ${fileName}`)
+      throw new Error(`Prompt 文件不存在或无法读取: ${fileName}`);
     }
 
-    return this.render(raw, vars)
+    return this.render(raw, vars);
   }
 
   /**
@@ -147,7 +147,7 @@ export class PromptService implements OnModuleInit {
    */
   private render(template: string, vars: Record<string, string>): string {
     return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-      return vars[key] !== undefined ? vars[key] : match
-    })
+      return vars[key] !== undefined ? vars[key] : match;
+    });
   }
 }

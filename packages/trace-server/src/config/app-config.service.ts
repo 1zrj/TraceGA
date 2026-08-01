@@ -35,4 +35,11 @@ export class AppConfigService {
       model: this.configService.get<string>('GLM_MODEL', 'glm-4-flash'),
     };
   }
+
+  get jwt() {
+    return {
+      secret: this.configService.get<string>('JWT_SECRET') ?? '',
+      expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') ?? '7d',
+    };
+  }
 }
