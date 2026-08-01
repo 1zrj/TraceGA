@@ -12,10 +12,10 @@ export interface ErrorPluginOptions extends ErrorPluginConfig {
 }
 
 export enum ErrorEventName {
-  JsError = 'js-error',
-  PromiseError = 'promise-error',
-  ResourceError = 'resource-error',
-  HttpError = 'http-error',
+  JsError = 'js_error',
+  PromiseError = 'promise_error',
+  ResourceError = 'resource_error',
+  HttpError = 'http_error',
 }
 
 export interface ErrorPayloadBase {

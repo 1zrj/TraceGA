@@ -59,11 +59,12 @@ describe('Reporter', () => {
       expect(fetchSpy).toHaveBeenCalled();
 
       const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
-      expect(body).toHaveLength(1);
-      expect(body[0].eventName).toBe('click_btn');
-      expect(body[0].customParams).toEqual({ page: 'home' });
-      expect(body[0].commonParams).toEqual({});
-      expect(body[0].envInfo).toBeDefined();
+      expect(body).toHaveProperty('events');
+      expect(body.events).toHaveLength(1);
+      expect(body.events[0].eventName).toBe('click_btn');
+      expect(body.events[0].customParams).toEqual({ page: 'home' });
+      expect(body.events[0].commonParams).toEqual({});
+      expect(body.events[0].envInfo).toBeDefined();
 
       fetchSpy.mockRestore();
     });
@@ -77,7 +78,7 @@ describe('Reporter', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
-      expect(body[0].commonParams).toEqual({ userId: 'u123', version: '1.0' });
+      expect(body.events[0].commonParams).toEqual({ userId: 'u123', version: '1.0' });
 
       fetchSpy.mockRestore();
     });
@@ -260,6 +261,42 @@ describe('Reporter', () => {
       await vi.advanceTimersByTimeAsync(0);
       const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
       expect(body[0].eventName).toBe('re_registered');
+      fetchSpy.mockRestore();
+    });
+
+    it('销毁时应先发送缓冲区剩余事件', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+      // 先入队一些事件，不触发阈值刷新
+      reporter.trackEvent('pending_event_1', {});
+      reporter.trackEvent('pending_event_2', {});
+
+      // 销毁 reporter
+      reporter.destroy();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(fetchSpy).toHaveBeenCalled();
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+      expect(body).toHaveProperty('events');
+      expect(body.events).toHaveLength(2);
+      expect(body.events[0].eventName).toBe('pending_event_1');
+      expect(body.events[1].eventName).toBe('pending_event_2');
+
+      fetchSpy.mockRestore();
+    });
+  });
+
+  describe('batch URL', () => {
+    it('应使用 /batch 端点', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+      reporter.trackEvent('test_event', {});
+      reporter.flush();
+      await vi.advanceTimersByTimeAsync(0);
+
+      const url = fetchSpy.mock.calls[0][0] as string;
+      expect(url).toBe('https://api.example.com/report/batch');
+
       fetchSpy.mockRestore();
     });
   });

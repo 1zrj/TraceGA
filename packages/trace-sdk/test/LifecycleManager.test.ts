@@ -57,7 +57,7 @@ describe('LifecycleManager', () => {
   }
 
   describe('页面隐藏', () => {
-    it('应在 visibilityState 变为 hidden 时暂停调度器并发送剩余数据', () => {
+    it('应在 visibilityState 变为 hidden 时暂停调度器并发送剩余数据', async () => {
       const events = [makeEvent('e1'), makeEvent('e2')];
       createManager({ events });
 
@@ -72,8 +72,19 @@ describe('LifecycleManager', () => {
       expect(sendBeaconSpy).toHaveBeenCalledTimes(1);
 
       const [url, blob] = sendBeaconSpy.mock.calls[0];
-      expect(url).toBe('https://api.example.com/report');
+      expect(url).toBe('https://api.example.com/report/batch');
       expect(blob).toBeInstanceOf(Blob);
+
+      // 验证 payload 格式为 { events: [...] }
+      const reader = new FileReader();
+      const text = await new Promise<string>(resolve => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsText(blob as Blob);
+      });
+      const parsed = JSON.parse(text);
+      expect(parsed).toHaveProperty('events');
+      expect(parsed.events).toHaveLength(2);
+      expect(parsed.events[0].eventName).toBe('e1');
     });
 
     it('应在 pagehide 事件时触发发送', () => {
@@ -118,9 +129,14 @@ describe('LifecycleManager', () => {
 
       expect(fetchSpy).toHaveBeenCalled();
       const fetchArg = fetchSpy.mock.calls[0];
-      expect(fetchArg[0]).toBe('https://api.example.com/report');
+      expect(fetchArg[0]).toBe('https://api.example.com/report/batch');
       expect(fetchArg[1].keepalive).toBe(true);
       expect(fetchArg[1].method).toBe('POST');
+
+      // 验证 payload 格式为 { events: [...] }
+      const body = JSON.parse(fetchArg[1].body as string);
+      expect(body).toHaveProperty('events');
+      expect(body.events).toHaveLength(1);
 
       globalThis.fetch = originalFetch;
     });

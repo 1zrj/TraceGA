@@ -7,7 +7,7 @@
 export class ConcurrencyLimiter {
   private maxConcurrent: number;
   private active: number;
-  private waitQueue: (() => void)[];
+  private waitQueue: Array<{ resolve: () => void; reject: (error: Error) => void }>;
 
   /**
    * @param maxConcurrent - 最大并发数（必须 >= 1）
@@ -33,10 +33,13 @@ export class ConcurrencyLimiter {
       return Promise.resolve();
     }
 
-    return new Promise<void>(resolve => {
-      this.waitQueue.push(() => {
-        this.active++;
-        resolve();
+    return new Promise<void>((resolve, reject) => {
+      this.waitQueue.push({
+        resolve: () => {
+          this.active++;
+          resolve();
+        },
+        reject,
       });
     });
   }
@@ -51,16 +54,21 @@ export class ConcurrencyLimiter {
 
     const next = this.waitQueue.shift();
     if (next) {
-      next();
+      next.resolve();
     }
   }
 
   /**
-   * 销毁并发限制器，清空等待队列并重置活跃计数。
+   * 销毁并发限制器，reject 等待队列中的 Promise 并重置活跃计数。
    */
   destroy(): void {
+    const queue = this.waitQueue;
     this.waitQueue = [];
     this.active = 0;
+
+    for (const entry of queue) {
+      entry.reject(new Error('ConcurrencyLimiter destroyed'));
+    }
   }
 
   /**

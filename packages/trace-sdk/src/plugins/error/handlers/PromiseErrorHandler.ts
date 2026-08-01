@@ -1,9 +1,9 @@
 import type { ITraceCore } from '../../../types';
 import type { ErrorHandler, ErrorPayloadBase } from '../types';
-import { getBrowserContext } from '../types';
+import { ErrorEventName, getBrowserContext } from '../types';
 
 export interface PromiseErrorPayload extends ErrorPayloadBase {
-  type: 'promise-error';
+  type: ErrorEventName.PromiseError;
   reasonType: string;
   reason?: string;
 }
@@ -89,7 +89,7 @@ export class PromiseErrorHandler implements ErrorHandler {
       return;
     }
 
-    this.core.trackEvent('promise-error', this.normalizeRejection(event.reason), 'urgent', 'error');
+    this.core.trackEvent(ErrorEventName.PromiseError, this.normalizeRejection(event.reason), 'urgent', 'error');
   };
 
   install(core: ITraceCore): void {
@@ -113,7 +113,7 @@ export class PromiseErrorHandler implements ErrorHandler {
   private normalizeRejection(reason: unknown): PromiseErrorPayload {
     if (reason instanceof Error) {
       return {
-        type: 'promise-error',
+        type: ErrorEventName.PromiseError,
         message: reason.message || 'Unhandled promise rejection',
         occurredAt: Date.now(),
         reasonType: 'Error',
@@ -127,7 +127,7 @@ export class PromiseErrorHandler implements ErrorHandler {
     const sanitized = this.sanitizeReason(reason);
 
     return {
-      type: 'promise-error',
+      type: ErrorEventName.PromiseError,
       message: `Unhandled ${reasonType} rejection`,
       occurredAt: Date.now(),
       reasonType,
