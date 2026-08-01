@@ -1,7 +1,6 @@
 import type { ITraceCore } from '../../../types';
 import type { ErrorHandler, ErrorPayloadBase } from '../types';
-import { getBrowserContext } from '../types';
-import { sanitizeErrorUrl } from '../types';
+import { ErrorEventName, getBrowserContext, sanitizeErrorUrl } from '../types';
 
 type XhrMeta = {
   method: string;
@@ -9,7 +8,7 @@ type XhrMeta = {
 };
 
 export interface HttpErrorPayload extends ErrorPayloadBase {
-  type: 'http-error';
+  type: ErrorEventName.HttpError;
   requestType: 'fetch' | 'xhr';
   method?: string;
   requestUrl?: string;
@@ -139,7 +138,7 @@ export class HttpErrorHandler implements ErrorHandler {
           const occurredAt = Date.now();
           const method = getFetchMethodStatic(input, init);
           queueHttpError({
-            type: 'http-error',
+            type: ErrorEventName.HttpError,
             requestType: 'fetch',
             message: `HTTP request failed: ${response.status}`,
             occurredAt,
@@ -158,7 +157,7 @@ export class HttpErrorHandler implements ErrorHandler {
           const occurredAt = Date.now();
           const method = getFetchMethodStatic(input, init);
           queueHttpError({
-            type: 'http-error',
+            type: ErrorEventName.HttpError,
             requestType: 'fetch',
             message: error instanceof Error ? error.message : 'Fetch request failed',
             occurredAt,
@@ -243,7 +242,7 @@ export class HttpErrorHandler implements ErrorHandler {
 
         const occurredAt = Date.now();
         queueHttpError({
-          type: 'http-error',
+          type: ErrorEventName.HttpError,
           requestType: 'xhr',
           message: `HTTP request failed: ${xhr.status}`,
           occurredAt,
@@ -267,7 +266,7 @@ export class HttpErrorHandler implements ErrorHandler {
 
         const occurredAt = Date.now();
         queueHttpError({
-          type: 'http-error',
+          type: ErrorEventName.HttpError,
           requestType: 'xhr',
           message: 'XMLHttpRequest failed',
           occurredAt,
@@ -328,7 +327,7 @@ export class HttpErrorHandler implements ErrorHandler {
       return;
     }
 
-    this.core.trackEvent('http-error', payload, 'urgent', 'error');
+    this.core.trackEvent(ErrorEventName.HttpError, payload, 'urgent', 'error');
   }
 }
 

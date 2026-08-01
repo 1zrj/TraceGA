@@ -12,6 +12,20 @@
       color: #e1e4e8;
       min-height: 100vh;
     }
+    body.white-screen-test-active .header,
+    body.white-screen-test-active .container {
+      display: none !important;
+    }
+    body.white-screen-test-active::before {
+      content: attr(data-white-screen-message);
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #30363d;
+      font-size: 12px;
+    }
 
     /* 滚动条美化 */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -309,6 +323,40 @@
             </button>
           </div>
 
+          <div id="errorPluginTests" style="display:none;">
+            <div class="section-title" style="margin-top:12px;">ErrorPlugin 测试</div>
+            <div class="event-grid">
+              <button class="event-btn" onclick="triggerJsError()">
+                <span class="icon">💥</span>JS 错误
+              </button>
+              <button class="event-btn" onclick="triggerPromiseError()">
+                <span class="icon">⛓️</span>Promise 错误
+              </button>
+              <button class="event-btn" onclick="triggerResourceError()">
+                <span class="icon">🖼️</span>资源加载错误
+              </button>
+              <button class="event-btn" onclick="triggerFetchError()">
+                <span class="icon">🌐</span>Fetch 404
+              </button>
+              <button class="event-btn" onclick="triggerXhrError()">
+                <span class="icon">📡</span>XHR 404
+              </button>
+              <button class="event-btn" onclick="triggerAllErrors()">
+                <span class="icon">🧪</span>依次触发全部
+              </button>
+            </div>
+          </div>
+
+          <div id="whiteScreenPluginTests" style="display:none;">
+            <div class="section-title" style="margin-top:12px;">WhiteScreenPlugin 测试</div>
+            <button class="btn btn-sm btn-block" onclick="triggerWhiteScreenTest()">
+              模拟白屏并自动恢复
+            </button>
+            <div style="margin-top:8px;font-size:11px;color:#8b949e;line-height:1.5;">
+              页面将隐藏约 4.5 秒；预期依次捕获 white_screen 和 white_screen_recovered。
+            </div>
+          </div>
+
           <div class="section-title" style="margin-top:12px;">优先级测试</div>
           <div class="btn-row">
             <button class="btn btn-sm" style="border-color:#f85149;color:#f85149;" onclick="sendEvent('urgent_test', 'urgent', 'custom')">urgent</button>
@@ -419,6 +467,10 @@
     // ========== 状态管理 ==========
     const stats = { total: 0, success: 0, failed: 0, pending: 0 };
     let sdkReady = false;
+    let errorPluginReady = false;
+    let whiteScreenPluginReady = false;
+    let whiteScreenRestoreTimer = null;
+    let whiteScreenDoneTimer = null;
 
     // ========== 日志系统 ==========
     function addLog(tag, msg, tagClass) {
@@ -488,7 +540,9 @@
         },
         hooks: {
           onReady: (cfg) => {
-            addLog('INFO', 'SDK 初始化完成: appId=' + cfg.appId + ', reportUrl=' + cfg.reportUrl, 'success');
+            errorPluginReady = Boolean(cfg.plugins?.error || cfg.enableAutoError);
+            whiteScreenPluginReady = Boolean(cfg.plugins?.whiteScreen);
+            addLog('INFO', 'SDK 初始化完成: projectId=' + cfg.projectId + ', reportUrl=' + cfg.reportUrl, 'success');
             updateStatus(true);
           },
           onBeforeTrack: (event) => {
@@ -539,7 +593,10 @@
 
     function destroySDK() {
       try {
+        restoreWhiteScreenTest(false);
         TraceGASDK.destroy();
+        errorPluginReady = false;
+        whiteScreenPluginReady = false;
         updateStatus(false);
         // 重置统计
         stats.total = 0;
@@ -662,7 +719,143 @@ function buildEventProperties(eventType) {
     }
 
     function onPluginChange() {
+      syncPluginTestVisibility();
       addLog('WARN', '插件配置已更改，请重新点击"初始化 SDK"生效', 'info');
+    }
+
+    function syncPluginTestVisibility() {
+      const errorEnabled = document.getElementById('pluginError').checked;
+      const whiteScreenEnabled = document.getElementById('pluginWhiteScreen').checked;
+      document.getElementById('errorPluginTests').style.display = errorEnabled ? '' : 'none';
+      document.getElementById('whiteScreenPluginTests').style.display = whiteScreenEnabled ? '' : 'none';
+    }
+
+    // ========== WhiteScreenPlugin 测试 ==========
+    function canTriggerWhiteScreenTest() {
+      if (!sdkReady) {
+        addLog('WARN', '请先勾选 WhiteScreenPlugin 并初始化 SDK', 'error');
+        return false;
+      }
+      if (!whiteScreenPluginReady) {
+        addLog('WARN', '当前 SDK 未启用 WhiteScreenPlugin；勾选后请重新初始化 SDK', 'error');
+        return false;
+      }
+      return true;
+    }
+
+    function triggerWhiteScreenTest() {
+      if (!canTriggerWhiteScreenTest()) return;
+
+      restoreWhiteScreenTest(false);
+      addLog('TEST', '即将模拟白屏并重新初始化检测计时；约 1 秒后预期事件名: white_screen', 'info');
+      document.body.classList.add('white-screen-test-active');
+      document.body.setAttribute('data-white-screen-message', 'WhiteScreenPlugin 测试中，页面将自动恢复…');
+
+      // 隐藏页面后重新安装插件，确保检测轮次从当前时刻重新计时。
+      setTimeout(initSDK, 50);
+
+      whiteScreenRestoreTimer = setTimeout(() => {
+        restoreWhiteScreenTest(true);
+      }, 4550);
+
+      whiteScreenDoneTimer = setTimeout(() => {
+        whiteScreenDoneTimer = null;
+        addLog('TEST', '白屏恢复检测已到期；预期事件名: white_screen_recovered', 'info');
+      }, 6550);
+    }
+
+    function restoreWhiteScreenTest(shouldLog) {
+      if (whiteScreenRestoreTimer) {
+        clearTimeout(whiteScreenRestoreTimer);
+        whiteScreenRestoreTimer = null;
+      }
+      if (!shouldLog && whiteScreenDoneTimer) {
+        clearTimeout(whiteScreenDoneTimer);
+        whiteScreenDoneTimer = null;
+      }
+
+      const wasActive = document.body.classList.contains('white-screen-test-active');
+      document.body.classList.remove('white-screen-test-active');
+      document.body.removeAttribute('data-white-screen-message');
+
+      if (shouldLog && wasActive) {
+        addLog('TEST', '页面已恢复；等待约 1.5 秒进行下一轮恢复检测', 'success');
+      }
+    }
+
+    // ========== ErrorPlugin 测试 ==========
+    function canTriggerErrorTest() {
+      if (!sdkReady) {
+        addLog('WARN', '请先勾选 ErrorPlugin 并初始化 SDK', 'error');
+        return false;
+      }
+      if (!errorPluginReady) {
+        addLog('WARN', '当前 SDK 未启用 ErrorPlugin；勾选后请重新初始化 SDK', 'error');
+        return false;
+      }
+      return true;
+    }
+
+    function triggerJsError() {
+      if (!canTriggerErrorTest()) return;
+      addLog('TEST', '即将触发未捕获的 JS Error；预期事件名: js_error', 'info');
+
+      // 放到新任务中抛出，避免被按钮点击调用栈或 SDK 自身的 try/catch 吞掉。
+      setTimeout(() => {
+        throw new Error('[TraceGA Test] JavaScript runtime error');
+      }, 0);
+    }
+
+    function triggerPromiseError() {
+      if (!canTriggerErrorTest()) return;
+      addLog('TEST', '即将触发未处理的 Promise rejection；预期事件名: promise_error', 'info');
+
+      // 不添加 catch，浏览器才会派发 unhandledrejection。
+      Promise.reject(new Error('[TraceGA Test] Unhandled promise rejection'));
+    }
+
+    function triggerResourceError() {
+      if (!canTriggerErrorTest()) return;
+      addLog('TEST', '即将加载不存在的图片；预期事件名: resource_error', 'info');
+
+      const image = document.createElement('img');
+      image.alt = 'TraceGA resource error test';
+      image.style.display = 'none';
+      image.src = './__tracega_missing_image__.png?test=' + Date.now();
+      document.body.appendChild(image);
+
+      // error 事件触发后再清理；延迟清理不会影响 ErrorPlugin 的捕获阶段监听器。
+      image.addEventListener('error', () => image.remove(), { once: true });
+    }
+
+    function triggerFetchError() {
+      if (!canTriggerErrorTest()) return;
+      addLog('TEST', '即将发起返回 404 的 Fetch；预期事件名: http_error (fetch)', 'info');
+
+      // fetch 对 404 不会 reject，但 ErrorPlugin 会依据 response.ok 捕获。
+      fetch('./__tracega_missing_api__?transport=fetch&test=' + Date.now())
+        .catch(() => { /* 网络层失败也由 ErrorPlugin 捕获，避免额外 Promise 错误 */ });
+    }
+
+    function triggerXhrError() {
+      if (!canTriggerErrorTest()) return;
+      addLog('TEST', '即将发起返回 404 的 XHR；预期事件名: http_error (xhr)', 'info');
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', './__tracega_missing_api__?transport=xhr&test=' + Date.now());
+      xhr.send();
+    }
+
+    function triggerAllErrors() {
+      if (!canTriggerErrorTest()) return;
+      addLog('TEST', '开始依次触发 5 个错误测试', 'info');
+
+      // 错开触发时间，便于在事件日志和 Network 面板中逐项核对。
+      triggerJsError();
+      setTimeout(triggerPromiseError, 300);
+      setTimeout(triggerResourceError, 600);
+      setTimeout(triggerFetchError, 900);
+      setTimeout(triggerXhrError, 1200);
     }
 
     // ========== 拦截网络请求进行监控 ==========
@@ -721,6 +914,7 @@ function buildEventProperties(eventType) {
     // ========== 初始化 ==========
     document.getElementById('sdkVersion').textContent = 'v' + (TraceGASDK?.SDK_VERSION || '?.?.?');
     updateStatus(false);
+    syncPluginTestVisibility();
 
     // 页面加载时自动初始化
     addLog('INFO', 'SDK 联调页面已加载，请配置参数后点击"初始化 SDK"', 'info');

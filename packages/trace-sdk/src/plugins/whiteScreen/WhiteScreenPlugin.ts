@@ -286,6 +286,7 @@ export class WhiteScreenPlugin implements TracePlugin {
     this.core.trackEvent(
       eventName,
       {
+        message: eventName === 'white_screen' ? 'White screen detected' : 'White screen recovered',
         detectMethod: result.detectMethod,
         elementCount: result.elementCount,
         viewWidth: window.innerWidth,

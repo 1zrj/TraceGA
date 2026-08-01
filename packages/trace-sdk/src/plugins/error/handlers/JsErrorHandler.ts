@@ -1,9 +1,9 @@
 import type { ITraceCore } from '../../../types';
 import type { ErrorHandler, ErrorPayloadBase } from '../types';
-import { getBrowserContext, sanitizeErrorUrl } from '../types';
+import { ErrorEventName, getBrowserContext, sanitizeErrorUrl } from '../types';
 
 export interface JsErrorPayload extends ErrorPayloadBase {
-  type: 'js-error';
+  type: ErrorEventName.JsError;
   filename?: string;
   lineno?: number;
   colno?: number;
@@ -17,7 +17,7 @@ export class JsErrorHandler implements ErrorHandler {
       return;
     }
 
-    this.core.trackEvent('js-error', this.normalizeError(event), 'urgent', 'error');
+    this.core.trackEvent(ErrorEventName.JsError, this.normalizeError(event), 'urgent', 'error');
   };
 
   install(core: ITraceCore): void {
@@ -46,7 +46,7 @@ export class JsErrorHandler implements ErrorHandler {
     const error = event.error instanceof Error ? event.error : null;
 
     return {
-      type: 'js-error',
+      type: ErrorEventName.JsError,
       message: event.message || error?.message || 'Unknown JavaScript error',
       occurredAt: Date.now(),
       filename: sanitizeErrorUrl(event.filename),
