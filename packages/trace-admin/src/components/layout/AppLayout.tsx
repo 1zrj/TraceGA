@@ -93,6 +93,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   account: '账号设置',
   profile: '个人中心',
   users: '用户管理',
+  alarm: '告警管理',
 }
 
 // ═══════════════════════════════════════════════════════════════
