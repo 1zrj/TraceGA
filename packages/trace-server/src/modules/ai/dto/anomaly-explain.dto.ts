@@ -20,8 +20,9 @@ class AnomalyContext {
 }
 
 export class AnomalyExplainDto {
+  @IsOptional()
   @IsString()
-  appId: string;
+  appId?: string;
 
   @IsString()
   eventName: string;

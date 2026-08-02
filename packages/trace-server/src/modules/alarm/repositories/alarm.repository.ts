@@ -18,13 +18,12 @@ const TREND_CONFIG: Record<string, { minutes: number; label: string }> = {
 export class AlarmRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 告警规则列表（原有实现保留，供规则管理使用） */
+  /** 告警规则列表（规则管理页使用，展示全部规则含停用/启用状态） */
   async findAll(query: GetAlarmListDto) {
     const { page = 1, pageSize = 20, appId, keyword } = query;
     const { skip, take } = paginate(page, pageSize);
 
     const where: Prisma.alarmWhereInput = {
-      status: 1,
       ...(appId && { project_id: appId }),
       ...(keyword && { event_name: { contains: keyword } }),
     };
@@ -203,7 +202,7 @@ export class AlarmRepository {
     return this.toAlarm(updated);
   }
 
-  /** 删除告警规则（软删除：status=0，不再参与定时任务扫描） */
+  /** 删除告警规则（物理删除，删除后不再出现在规则管理列表） */
   async removeRule(id: string): Promise<boolean> {
     const existing = await this.prisma.alarm.findUnique({
       where: { id: BigInt(id) },
@@ -212,9 +211,8 @@ export class AlarmRepository {
       return false;
     }
 
-    await this.prisma.alarm.update({
+    await this.prisma.alarm.delete({
       where: { id: BigInt(id) },
-      data: { status: 0, updated_at: new Date() },
     });
     return true;
   }

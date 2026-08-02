@@ -95,7 +95,6 @@ model alarm_record {
 model user {
   id            BigInt    @id @default(autoincrement())
   username      String    @unique(map: "username") @db.VarChar(64)
-  password      String    @db.VarChar(128)
   password_hash String?   @db.VarChar(128)
   name          String    @db.VarChar(64)
   phone         String?   @unique(map: "phone") @db.VarChar(32)

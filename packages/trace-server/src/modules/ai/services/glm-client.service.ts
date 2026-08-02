@@ -36,8 +36,10 @@ export interface GlmChatResult {
 export class GlmClientService {
   private readonly logger = new Logger(GlmClientService.name);
 
-  /** GLM API 地址 */
-  private readonly apiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+  /** GLM API 地址（可通过环境变量 GLM_API_URL 覆盖） */
+  private get apiUrl(): string {
+    return this.configService.get<string>('GLM_API_URL', 'https://open.bigmodel.cn/api/paas/v4/chat/completions');
+  }
 
   /** 请求超时时间（毫秒） */
   private readonly timeout = 15_000;
@@ -122,34 +124,46 @@ export class GlmClientService {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
+    // 通过熔断器保护 HTTP 请求阶段：熔断打开时快速失败，失败时累积计数
+    let reader: ReadableStreamDefaultReader<string>;
     try {
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature,
-          max_tokens: maxTokens,
-          stream: true,
-        }),
-        signal: controller.signal,
+      reader = await this.circuitBreaker.call(async () => {
+        const response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            temperature,
+            max_tokens: maxTokens,
+            stream: true,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.text().catch(() => '无法读取响应体');
+          throw new Error(`GLM API 返回错误 [${response.status}]: ${errorBody}`);
+        }
+
+        return response.body.pipeThrough(new TextDecoderStream()).getReader();
       });
-
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => '无法读取响应体');
-        throw new Error(`GLM API 返回错误 [${response.status}]: ${errorBody}`);
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error(`GLM API 请求超时（${this.timeout / 1000}秒）`);
       }
+      throw err;
+    }
 
-      // 逐行读取 SSE 流
-      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-
+    // 流式读取（熔断器已通过，开始接收数据，不再重试）
+    try {
       let buffer = '';
       while (true) {
         const { done, value } = await reader.read();
@@ -175,11 +189,6 @@ export class GlmClientService {
           }
         }
       }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error(`GLM API 请求超时（${this.timeout / 1000}秒）`);
-      }
-      throw err;
     } finally {
       clearTimeout(timeoutId);
     }

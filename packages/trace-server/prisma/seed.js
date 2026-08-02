@@ -272,7 +272,7 @@ async function main() {
     if (existingUser.length === 0) {
       const hashedPassword = await bcrypt.hash('admin123', 10)
       await conn.query(
-        'INSERT INTO user (username, password, name, email, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
+        'INSERT INTO user (username, password_hash, name, email, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
         ['admin', hashedPassword, 'Admin', 'admin@tracega.com', 'admin'],
       )
       console.log('默认 admin 用户创建成功（密码: admin123）')

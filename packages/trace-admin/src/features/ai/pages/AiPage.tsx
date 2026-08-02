@@ -169,7 +169,7 @@ const AiPage: React.FC = () => {
         case 'anomalyExplain':
           startStream(
             explainAnomalyStream,
-            { appId: 'default', eventName: inputText || '异常事件' },
+            { eventName: inputText || '异常事件' },
             inputText || '解释异常',
           )
           break
@@ -183,7 +183,7 @@ const AiPage: React.FC = () => {
         case 'recommend':
           startStream(
             recommendStream,
-            { appId: 'default', description: inputText || '用户注册流程' },
+            { description: inputText || '用户注册流程' },
             inputText || '埋点推荐',
           )
           break

@@ -1,31 +1,31 @@
-import { IsString, IsOptional, IsArray } from 'class-validator'
+import { IsString, IsOptional, IsArray } from 'class-validator';
 
 export class AiAnalyzeDto {
   @IsOptional()
   @IsString()
-  appId?: string
+  appId?: string;
 
   @IsOptional()
   @IsString()
-  analysisType?: string
+  analysisType?: string;
 
   @IsOptional()
   @IsArray()
-  eventNames?: string[]
+  eventNames?: string[];
 
   @IsOptional()
   @IsString()
-  startTime?: string
+  startTime?: string;
 
   @IsOptional()
   @IsString()
-  endTime?: string
+  endTime?: string;
 
   @IsOptional()
   @IsString()
-  prompt?: string
+  prompt?: string;
 
   @IsOptional()
   @IsString()
-  question?: string
+  question?: string;
 }

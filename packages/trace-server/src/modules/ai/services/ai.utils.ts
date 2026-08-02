@@ -16,6 +16,7 @@ export async function writeSSE(res: any, messages: AsyncGenerator<SSEMessage>): 
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
 
   try {
     for await (const msg of messages) {

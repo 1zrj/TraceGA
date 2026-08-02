@@ -223,7 +223,7 @@ export interface AiAnalysisResult {
 }
 
 export interface DailyReportDto {
-  appId: string
+  appId?: string
   date?: string
 }
 
@@ -243,7 +243,7 @@ export interface DailyReportResult {
 }
 
 export interface AnomalyExplainDto {
-  appId: string
+  appId?: string
   eventName: string
   currentValue?: number
   previousValue?: number
@@ -288,7 +288,7 @@ export interface NlQueryResult {
 }
 
 export interface RecommendDto {
-  appId: string
+  appId?: string
   description: string
 }
 

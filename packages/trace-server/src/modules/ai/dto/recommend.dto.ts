@@ -1,8 +1,9 @@
-import { IsString } from 'class-validator';
+import { IsString, IsOptional } from 'class-validator';
 
 export class RecommendDto {
+  @IsOptional()
   @IsString()
-  appId: string;
+  appId?: string;
 
   @IsString()
   description: string;
