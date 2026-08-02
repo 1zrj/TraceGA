@@ -128,6 +128,11 @@ async function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig):
   return response.data.data
 }
 
+async function patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  const response = await instance.patch<ApiResponse<T>>(url, data, config)
+  return response.data.data
+}
+
 async function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const response = await instance.delete<ApiResponse<T>>(url, config)
   return response.data.data
@@ -135,6 +140,6 @@ async function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
 
 // ─── 导出 ──────────────────────────────────────────────────────
 
-const request = { get, post, put, delete: del }
+const request = { get, post, put, patch, delete: del }
 export default request
 export { instance as requestInstance }

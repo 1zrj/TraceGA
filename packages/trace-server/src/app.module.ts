@@ -1,5 +1,5 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
-import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { EventModule } from './modules/event/event.module';
@@ -10,6 +10,7 @@ import { AlarmModule } from './modules/alarm/alarm.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { AuthGuard } from './common/guards/auth.guard';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware';
 import { CorsMiddleware } from './common/middlewares/cors.middleware';
 
@@ -23,6 +24,10 @@ import { CorsMiddleware } from './common/middlewares/cors.middleware';
     {
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
     },
   ],
 })

@@ -36,11 +36,12 @@ export interface AlarmItem {
   id: string
   name: string
   type: string
-  level: string
-  status: string
+  level: 'low' | 'medium' | 'high' | 'critical'
+  status: 'pending' | 'processing' | 'resolved' | 'closed'
   appId: string
   rule: string
-  notifyChannels: string[]
+  message: string
+  data: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }
@@ -51,7 +52,47 @@ export interface AlarmQueryDto {
   keyword?: string
   status?: string
   level?: string
+  appId?: string
+  startTime?: string
+  endTime?: string
 }
+
+export interface AlarmTrendItem {
+  time: string
+  count: number
+}
+
+export interface UpdateAlarmStatusDto {
+  status: 'processing' | 'resolved' | 'closed'
+  remark?: string
+}
+
+// ─── 告警规则类型 ─────────────────────────────────────────
+
+export interface AlarmRuleItem {
+  id: string
+  appId: string
+  eventName: string
+  threshold: number
+  operator: 'gt' | 'lt'
+  notifyType: string
+  webhookUrl: string
+  status: 0 | 1
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateAlarmRuleDto {
+  appId: string
+  eventName: string
+  threshold: number
+  operator: 'gt' | 'lt'
+  notifyType?: string
+  webhookUrl?: string
+  status?: number
+}
+
+export type UpdateAlarmRuleDto = Partial<CreateAlarmRuleDto>
 
 export interface PageInfo {
   page: number
@@ -182,7 +223,7 @@ export interface AiAnalysisResult {
 }
 
 export interface DailyReportDto {
-  appId: string
+  appId?: string
   date?: string
 }
 
@@ -202,7 +243,7 @@ export interface DailyReportResult {
 }
 
 export interface AnomalyExplainDto {
-  appId: string
+  appId?: string
   eventName: string
   currentValue?: number
   previousValue?: number
@@ -247,7 +288,7 @@ export interface NlQueryResult {
 }
 
 export interface RecommendDto {
-  appId: string
+  appId?: string
   description: string
 }
 

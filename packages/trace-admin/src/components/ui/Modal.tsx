@@ -1,5 +1,5 @@
 // Modal — 二次封装（基于 antd Modal）
-// maskClosable=false / destroyOnClose=true / C 端居中
+// maskClosable=false / destroyOnHidden=true / C 端居中
 
 import React from 'react'
 import { Modal as AntModal } from 'antd'
@@ -10,7 +10,7 @@ import type { Variant } from '@/tokens'
 
 export interface AppModalProps extends Omit<
   React.ComponentProps<typeof AntModal>,
-  'variant' | 'maskClosable' | 'destroyOnClose'
+  'variant' | 'maskClosable' | 'destroyOnHidden'
 > {
   variant?: Variant
 }
@@ -20,7 +20,7 @@ export interface AppModalProps extends Omit<
 function ModalFn({
   variant = 'b',
   maskClosable = false,
-  destroyOnClose = true,
+  destroyOnHidden = true,
   centered = variant === 'c',
   className,
   ...rest
@@ -28,7 +28,7 @@ function ModalFn({
   return (
     <AntModal
       maskClosable={maskClosable}
-      destroyOnClose={destroyOnClose}
+      destroyOnHidden={destroyOnHidden}
       centered={centered}
       className={cn('modal', cnVar(variant), className)}
       {...rest}

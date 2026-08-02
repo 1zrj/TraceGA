@@ -5,6 +5,7 @@ export class Alarm {
   threshold: number;
   operator: string;
   notifyType: string;
+  webhookUrl: string;
   status: number;
   createdAt: Date | null;
   updatedAt: Date | null;

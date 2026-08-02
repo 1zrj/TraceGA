@@ -1,5 +1,5 @@
 // Drawer — 二次封装（基于 antd Drawer）
-// maskClosable=false / destroyOnClose=true / B 端 520px / C 端 640px
+// maskClosable=false / destroyOnHidden=true / B 端 520px / C 端 640px
 
 import React from 'react'
 import { Drawer as AntDrawer } from 'antd'
@@ -10,7 +10,7 @@ import type { Variant } from '@/tokens'
 
 export interface AppDrawerProps extends Omit<
   React.ComponentProps<typeof AntDrawer>,
-  'variant' | 'maskClosable' | 'destroyOnClose'
+  'variant' | 'maskClosable' | 'destroyOnHidden'
 > {
   variant?: Variant
 }
@@ -20,7 +20,7 @@ export interface AppDrawerProps extends Omit<
 export const Drawer: React.FC<AppDrawerProps> = ({
   variant = 'b',
   maskClosable = false,
-  destroyOnClose = true,
+  destroyOnHidden = true,
   width = variant === 'b' ? 520 : 640,
   className,
   ...rest
@@ -28,7 +28,7 @@ export const Drawer: React.FC<AppDrawerProps> = ({
   return (
     <AntDrawer
       maskClosable={maskClosable}
-      destroyOnClose={destroyOnClose}
+      destroyOnHidden={destroyOnHidden}
       width={width}
       className={cn('drawer', cnVar(variant), className)}
       {...rest}
