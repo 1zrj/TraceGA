@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useCallback } from 'react'
-import { Card, Table, Tag, Space, Empty } from 'antd'
+import React, { useEffect, useMemo, useCallback, useState } from 'react'
+import { Card, Table, Tag, Space, Empty, Tabs } from 'antd'
 import dayjs from 'dayjs'
 import { Modal, Button } from '@/components/ui'
 import { useAlarmStore } from '@/store/useAlarmStore'
@@ -8,6 +8,7 @@ import { TimeRangeFilter } from '../components/TimeRangeFilter'
 import { AlarmTrendChart } from '../components/AlarmTrendChart'
 import { SearchFilterBar } from '../components/SearchFilterBar'
 import { AlarmDetailDrawer } from '../components/AlarmDetailDrawer'
+import { RuleManagement } from '../components/RuleManagement'
 import './AlarmList.css'
 
 const LEVEL_MAP: Record<string, { label: string; color: string }> = {
@@ -25,6 +26,8 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 }
 
 export const AlarmList: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('records')
+
   const records = useAlarmStore((s) => s.records)
   const total = useAlarmStore((s) => s.total)
   const loading = useAlarmStore((s) => s.loading)
@@ -168,45 +171,66 @@ export const AlarmList: React.FC = () => {
         告警管理
       </h1>
 
-      {/* 时间范围筛选 */}
-      <div style={{ marginBottom: 16 }}>
-        <TimeRangeFilter />
-      </div>
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          {
+            key: 'records',
+            label: '告警记录',
+            children: (
+              <>
+                {/* 时间范围筛选 */}
+                <div style={{ marginBottom: 16 }}>
+                  <TimeRangeFilter />
+                </div>
 
-      {/* 趋势图 */}
-      <AlarmTrendChart />
+                {/* 趋势图 */}
+                <AlarmTrendChart />
 
-      {/* 表格区域 */}
-      <Card styles={{ body: { padding: 24 } }}>
-        <SearchFilterBar />
-        <Table
-          columns={columns}
-          dataSource={records}
-          rowKey="id"
-          loading={loading}
-          scroll={{ x: 1200 }}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            pageSizeOptions: ['10', '20', '50'],
-            showTotal: (t: number) => `共 ${t} 条记录`,
-            onChange: (p: number, ps: number) => {
-              if (ps !== pageSize) {
-                setPageSize(ps)
-              } else {
-                setPage(p)
-              }
-            },
-          }}
-          rowClassName={(_record: unknown, index: number) => (index % 2 === 1 ? 'row-striped' : '')}
-          locale={{
-            emptyText: <Empty description="暂无告警记录" />,
-          }}
-        />
-      </Card>
+                {/* 表格区域 */}
+                <Card styles={{ body: { padding: 24 } }}>
+                  <SearchFilterBar />
+                  <Table
+                    columns={columns}
+                    dataSource={records}
+                    rowKey="id"
+                    loading={loading}
+                    scroll={{ x: 1200 }}
+                    pagination={{
+                      current: page,
+                      pageSize,
+                      total,
+                      showSizeChanger: true,
+                      showQuickJumper: true,
+                      pageSizeOptions: ['10', '20', '50'],
+                      showTotal: (t: number) => `共 ${t} 条记录`,
+                      onChange: (p: number, ps: number) => {
+                        if (ps !== pageSize) {
+                          setPageSize(ps)
+                        } else {
+                          setPage(p)
+                        }
+                      },
+                    }}
+                    rowClassName={(_record: unknown, index: number) =>
+                      index % 2 === 1 ? 'row-striped' : ''
+                    }
+                    locale={{
+                      emptyText: <Empty description="暂无告警记录" />,
+                    }}
+                  />
+                </Card>
+              </>
+            ),
+          },
+          {
+            key: 'rules',
+            label: '规则管理',
+            children: <RuleManagement />,
+          },
+        ]}
+      />
 
       {/* 详情抽屉 */}
       <AlarmDetailDrawer />

@@ -67,6 +67,33 @@ export interface UpdateAlarmStatusDto {
   remark?: string
 }
 
+// ─── 告警规则类型 ─────────────────────────────────────────
+
+export interface AlarmRuleItem {
+  id: string
+  appId: string
+  eventName: string
+  threshold: number
+  operator: 'gt' | 'lt'
+  notifyType: string
+  webhookUrl: string
+  status: 0 | 1
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateAlarmRuleDto {
+  appId: string
+  eventName: string
+  threshold: number
+  operator: 'gt' | 'lt'
+  notifyType?: string
+  webhookUrl?: string
+  status?: number
+}
+
+export type UpdateAlarmRuleDto = Partial<CreateAlarmRuleDto>
+
 export interface PageInfo {
   page: number
   pageSize: number

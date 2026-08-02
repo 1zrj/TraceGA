@@ -5,6 +5,9 @@ import type {
   AlarmQueryDto,
   AlarmTrendItem,
   UpdateAlarmStatusDto,
+  AlarmRuleItem,
+  CreateAlarmRuleDto,
+  UpdateAlarmRuleDto,
 } from '@/types'
 
 export const getAlarmList = (params: AlarmQueryDto) => {
@@ -21,4 +24,22 @@ export const getAlarmTrend = (params: { timeRange: string }) => {
 
 export const updateAlarmStatus = (id: string, body: UpdateAlarmStatusDto) => {
   return request.patch<AlarmItem>(`/alarm/${id}/status`, body)
+}
+
+// ─── 告警规则 ─────────────────────────────────────────────
+
+export const getAlarmRules = (params: AlarmQueryDto) => {
+  return request.get<PagedResponse<AlarmRuleItem>>('/alarm/rules', { params })
+}
+
+export const createAlarmRule = (body: CreateAlarmRuleDto) => {
+  return request.post<AlarmRuleItem>('/alarm/rules', body)
+}
+
+export const updateAlarmRule = (id: string, body: UpdateAlarmRuleDto) => {
+  return request.patch<AlarmRuleItem>(`/alarm/rules/${id}`, body)
+}
+
+export const deleteAlarmRule = (id: string) => {
+  return request.delete<AlarmRuleItem>(`/alarm/rules/${id}`)
 }

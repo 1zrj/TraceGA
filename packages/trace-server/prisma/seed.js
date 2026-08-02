@@ -227,6 +227,46 @@ async function main() {
     const cnt = Number(beforeCount[0].cnt)
     console.log(`追加 ${events.length} 条模拟事件日志成功（当前总量：${cnt} → ${cnt + events.length}）`)
 
+    // ── 3.1 生成近期突发事件（最近 10 分钟内，用于触发告警） ──
+    const BURST_EVENTS = [
+      { event_name: 'page_view', event_type: 'page_view', count: 150 },
+      { event_name: 'button_click', event_type: 'click', count: 90 },
+      { event_name: 'api_call', event_type: 'custom', count: 50 },
+      { event_name: 'error_js-error', event_type: 'error', count: 25 },
+    ]
+    const burstRows = []
+    for (const item of BURST_EVENTS) {
+      for (let i = 0; i < item.count; i++) {
+        const occurredAt = new Date(
+          Date.now() - Math.floor(Math.random() * 9) * 60000 - Math.floor(Math.random() * 60) * 1000,
+        )
+          .toISOString()
+          .slice(0, 19)
+          .replace('T', ' ')
+        burstRows.push([
+          PROJECT_ID,
+          item.event_name,
+          item.event_type,
+          occurredAt,
+          UIDS[i % UIDS.length],
+          SESSION_IDS[i % SESSION_IDS.length],
+          PAGE_URLS[i % PAGE_URLS.length],
+          null,
+          USER_AGENTS[0],
+          IPS[0],
+        ])
+      }
+    }
+    for (let i = 0; i < burstRows.length; i += batchSize) {
+      const batch = burstRows.slice(i, i + batchSize)
+      const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')
+      await conn.query(
+        `INSERT INTO event_log (project_id, event_name, event_type, occurred_at, uid, session_id, page_url, event_params, user_agent, ip) VALUES ${placeholders}`,
+        batch.flat(),
+      )
+    }
+    console.log(`追加 ${burstRows.length} 条近期突发事件（最近 10 分钟内，可触发告警）`)
+
     // ── 4. 创建默认 admin 用户 ──────────────────────────────
     const existingUser = await conn.query('SELECT id FROM user WHERE username = ?', ['admin'])
     if (existingUser.length === 0) {
@@ -240,19 +280,68 @@ async function main() {
       console.log('admin 用户已存在，跳过创建')
     }
 
-    // ── 4. 告警规则 ────────────────────────────────────
-    const existingAlarms = await conn.query('SELECT COUNT(*) AS cnt FROM alarm')
-    if (Number(existingAlarms[0].cnt) > 0) {
-      console.log('告警规则已存在，跳过创建')
+    // ── 4. 告警规则（幂等：先清空再重建，指向真实项目 trace-app） ──
+    await conn.query('DELETE FROM alarm')
+    await conn.query(`INSERT INTO alarm (project_id, event_name, threshold, operator, notify_type, webhook_url, status) VALUES
+      ('trace-app', 'page_view', 100, 'gt', 'webhook', 'https://webhook.site/demo-tracega-alarm', 1),
+      ('trace-app', 'button_click', 60, 'gt', 'webhook', 'https://webhook.site/demo-tracega-alarm', 1),
+      ('trace-app', 'api_call', 100, 'lt', 'webhook', 'https://webhook.site/demo-tracega-alarm', 1),
+      ('trace-app', 'error_js-error', 20, 'gt', 'webhook', 'https://webhook.site/demo-tracega-alarm', 1)
+    `)
+    console.log('插入 4 条告警规则成功（project_id 指向 trace-app，可被定时任务触发）')
+
+    // ── 4.1 告警记录（alarm_record） ────────────────────
+    const existingAlarmRecords = await conn.query('SELECT COUNT(*) AS cnt FROM alarm_record')
+    if (Number(existingAlarmRecords[0].cnt) > 0) {
+      console.log('告警记录已存在，跳过创建')
     } else {
-      await conn.query(`INSERT INTO alarm (project_id, event_name, threshold, operator, notify_type, status) VALUES
-        ('app001', 'page_view', 10000, 'gt', 'webhook', 1),
-        ('app001', 'click', 5000, 'gt', 'email', 1),
-        ('app001', 'error', 100, 'gt', 'webhook', 1),
-        ('app001', 'api_call', 2000, 'gt', 'email', 1),
-        ('app001', '订单完成', 500, 'lt', 'webhook', 1)
-      `)
-      console.log('插入 5 条告警规则成功')
+      const now = Date.now()
+      const DAY_MS = 86400000
+      const ALARM_SAMPLES = [
+        { name: '页面浏览量异常飙升', alarm_type: '错误量超阈值', level: 'critical', event_name: 'page_view', rule: 'page_view > 10000', message: '页面 page_view 事件量在 5 分钟内从均值 2000 飙升至 18500，超过阈值 10000，触发严重告警', data: { eventName: 'page_view', currentValue: 18500, threshold: 10000, operator: 'gt' } },
+        { name: 'API 响应延迟超过 2s', alarm_type: 'API响应延迟', level: 'high', event_name: 'api_call', rule: 'api_call > 2000', message: 'API 接口 /api/analysis/summary 平均响应时间 2.3s，超过阈值 2s', data: { eventName: 'api_call', currentValue: 2300, threshold: 2000, operator: 'gt' } },
+        { name: '错误事件数量突增', alarm_type: '错误量超阈值', level: 'high', event_name: 'error', rule: 'error > 100', message: '5 分钟内错误事件数量达 142 条，超过阈值 100', data: { eventName: 'error', currentValue: 142, threshold: 100, operator: 'gt' } },
+        { name: '点击量低于预期', alarm_type: '事件量低于阈值', level: 'low', event_name: 'button_click', rule: 'button_click < 500', message: '今日 button_click 事件量 320 次，低于阈值 500', data: { eventName: 'button_click', currentValue: 320, threshold: 500, operator: 'lt' } },
+        { name: '订单完成率异常下降', alarm_type: '事件量低于阈值', level: 'medium', event_name: '订单完成', rule: '订单完成 < 500', message: '今日订单完成事件量 210 次，低于阈值 500，转化率异常', data: { eventName: '订单完成', currentValue: 210, threshold: 500, operator: 'lt' } },
+      ]
+      const ALARM_STATUS = ['pending', 'processing', 'resolved', 'closed']
+
+      const alarmRecords = []
+      for (let i = 0; i < 30; i++) {
+        const sample = ALARM_SAMPLES[i % ALARM_SAMPLES.length]
+        const daysAgo = Math.floor(Math.random() * 7)
+        const hoursOffset = 9 + Math.floor(Math.random() * 12)
+        const minutesOffset = Math.floor(Math.random() * 60)
+        const createdAt = new Date(now - daysAgo * DAY_MS - hoursOffset * 3600000 - minutesOffset * 60000)
+          .toISOString()
+          .slice(0, 19)
+          .replace('T', ' ')
+
+        alarmRecords.push([
+          'app001',
+          sample.event_name,
+          sample.name,
+          sample.alarm_type,
+          sample.level,
+          ALARM_STATUS[i % ALARM_STATUS.length],
+          sample.rule,
+          sample.message,
+          JSON.stringify(sample.data),
+          createdAt,
+          createdAt,
+        ])
+      }
+
+      const batchSize = 20
+      for (let i = 0; i < alarmRecords.length; i += batchSize) {
+        const batch = alarmRecords.slice(i, i + batchSize)
+        const placeholders = batch.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')
+        await conn.query(
+          `INSERT INTO alarm_record (project_id, event_name, name, alarm_type, level, status, rule, message, data, created_at, updated_at) VALUES ${placeholders}`,
+          batch.flat(),
+        )
+      }
+      console.log(`插入 ${alarmRecords.length} 条告警记录成功`)
     }
 
     console.log('\n✓ 种子数据初始化完成！')

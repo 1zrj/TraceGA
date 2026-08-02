@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Radio, type RadioChangeEvent } from 'antd'
+import { Radio } from 'antd'
 import { useAlarmStore } from '@/store/useAlarmStore'
 
 const TIME_OPTIONS = [
@@ -17,7 +17,7 @@ export const TimeRangeFilter: React.FC = () => {
   const fetchList = useAlarmStore((s) => s.fetchList)
 
   const handleChange = useCallback(
-    (e: RadioChangeEvent) => {
+    (e: { target: { value: string } }) => {
       setFilters({ timeRange: e.target.value })
       fetchTrend()
       fetchList()
